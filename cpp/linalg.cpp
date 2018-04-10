@@ -15,6 +15,7 @@ int str2int(char *num)
 	while(pw--) res += (int(*(num++))-48)*pow(10,pw);
 	return res;
 }
+
 /* char array must end with '\0' special character */
 long double str2double(char *num)
 {
@@ -28,6 +29,13 @@ long double str2double(char *num)
 	num++;
 	while(*(num)>='0' && *(num)<='9') res += (int(*(num++))-48)*pow(10,--pw);
 	return sign*res;
+}
+
+/* get sign of a number */
+int sign(long double number)
+{
+	if(number < 0) return -1;
+	return 1;
 }
 
 /*#######################  LINEAR ALGEBRA MODULE  ############################*/
@@ -48,6 +56,16 @@ Vector* new_vector(long double *v_pt, int size)
 	Vector *v = (Vector*)malloc(sizeof(Vector));
 	v->V = v_pt;
 	v->size = size;
+	return v;
+}
+/* gets new vector from another one, it may be a subsection */
+Vector* new_vector(long double *v_pt, int ini, int fin)
+{
+	Vector *v = (Vector*)malloc(sizeof(Vector));
+	v->V = (long double*)malloc(sizeof(long double)*(fin-ini));
+	int j = 0;
+	for (int i = ini; i < fin; i++,j++) *(v->V+j) = *(v_pt+i);
+	v->size = fin-ini;
 	return v;
 }
 
@@ -81,7 +99,6 @@ Matrix* new_I_matrix(int size)
 Matrix* transpose(Matrix *M)
 {
 	Matrix *T = new_matrix(M->cols,M->rows);
-	printf("check1\n");
 	for (int i = 0; i < T->rows; ++i)
 		for (int j = 0; j < T->cols; ++j) T->M[i][j] = M->M[j][i];
 	return T;
@@ -135,6 +152,142 @@ Matrix* append(Matrix *A, Vector *b, int axis)
 	return append_c(A,b);
 }
 
+/* appends at the end of the vector the value given */
+Vector* append(Vector *u, long double value)
+{
+	Vector *v = new_vector(u->size+1);
+	int i = 0;
+	for (i; i < u->size; i++) *(v->V+i) = *(u->V+i);
+	*(v->V+i) = value;
+	return v;
+}
+
+Vector* insert(Vector *u, int index, long double value)
+{
+	Vector *v = new_vector(u->size+1);
+	int i = 0;
+	for (i; i < index; i++) *(v->V+i) = *(u->V+i);
+	*(v->V+i) = value;
+	i++;
+	for (i; i < v->size; i++) *(v->V+i) = *(u->V+i-1);
+	return v;
+}
+
+Matrix* insert_r(Matrix *A, int index, Vector *b)
+{
+	if(index > A->rows)
+	{
+		printf("Error in insert_r(A,index,b): index must be lower than number of rows of matrix A\n");
+		return NULL;
+	}
+	Matrix *B = new_matrix(A->rows+1,A->cols);
+	int r_i = 0;
+	for (r_i; r_i < index; r_i++)
+		for (int c_i = 0; c_i < A->cols; ++c_i)
+			*(*(B->M+r_i)+c_i) = *(*(A->M+r_i)+c_i);
+
+	for (int c_i = 0; c_i < A->cols; ++c_i)
+		*(*(B->M + r_i) + c_i) = *(b->V+c_i);
+	r_i++;
+	for (r_i; r_i-1 < A->rows; r_i++)
+		for (int c_i = 0; c_i < A->cols; ++c_i)
+			*(*(B->M+r_i)+c_i) = *(*(A->M+r_i-1)+c_i);
+	return B;
+}
+
+Matrix* insert_c(Matrix *A, int index, Vector *b)
+{
+	if(index > A->cols)
+	{
+		printf("Error in insert_c(A,index,b,axis=1): index must be lower than number of cols of matrix A\n");
+		return NULL;
+	}
+	Matrix *B = new_matrix(A->rows,A->cols+1);
+	int c_i = 0;
+	for (c_i; c_i < index; c_i++)
+		for (int r_i = 0; r_i < A->rows; r_i++)
+			*(*(B->M+r_i)+c_i) = *(*(A->M+r_i)+c_i);
+
+	for (int r_i = 0; r_i < A->rows; r_i++)
+		*(*(B->M + r_i) + c_i) = *(b->V+r_i);
+	c_i++;
+
+	for (c_i; c_i < B->cols; c_i++)
+		for (int r_i = 0; r_i < A->rows; r_i++)
+			*(*(B->M+r_i)+c_i) = *(*(A->M+r_i)+c_i-1);
+	return B;
+}
+/* inserts a vector in the axis given at the index given */
+Matrix* insert(Matrix *A, int index, Vector *b, int axis)
+{
+	if (axis==0)
+	{
+		return insert_r(A,index,b);
+	}
+	return insert_c(A,index,b);
+}
+
+Vector* remove(Vector *u, int index)
+{
+	if(index >= u->size)
+	{
+		printf("Error in remove(u,index): index must be lower than size of vector u.\n");
+		return NULL;
+	}
+	Vector *v = new_vector(u->size-1);
+	int i = 0;
+	for (i; i < index; ++i) *(v->V+i) = *(u->V+i);
+	i++;
+	for (i; i-1 < v->size; ++i) *(v->V+i-1) = *(u->V+i);
+	return v;
+}
+
+Matrix* remove_r(Matrix *A, int index)
+{
+	if(index >= A->rows)
+	{
+		printf("Error in remove_r(A,index,b): index must be lower than number of rows of matrix A\n");
+		return NULL;
+	}
+	Matrix *B = new_matrix(A->rows-1,A->cols);
+	int r_i = 0;
+	for (r_i; r_i < index; r_i++)
+		for (int c_i = 0; c_i < A->cols; ++c_i)
+			*(*(B->M+r_i)+c_i) = *(*(A->M+r_i)+c_i);
+	r_i++;
+	for (r_i; r_i-1 < B->rows; r_i++)
+		for (int c_i = 0; c_i < A->cols; ++c_i)
+			*(*(B->M+r_i-1)+c_i) = *(*(A->M+r_i)+c_i);
+	return B;
+}
+
+Matrix* remove_c(Matrix *A, int index)
+{
+	if(index > A->cols)
+	{
+		printf("Error in remove_c(A,index,b,axis=1): index must be lower than number of cols of matrix A\n");
+		return NULL;
+	}
+	Matrix *B = new_matrix(A->rows,A->cols-1);
+	int c_i = 0;
+	for (c_i; c_i < index; c_i++)
+		for (int r_i = 0; r_i < A->rows; r_i++)
+			*(*(B->M+r_i)+c_i) = *(*(A->M+r_i)+c_i);
+	c_i++;
+	for (c_i; c_i-1 < B->cols; c_i++)
+		for (int r_i = 0; r_i < A->rows; r_i++)
+			*(*(B->M+r_i)+c_i-1) = *(*(A->M+r_i)+c_i);
+	return B;
+}
+/* removes a column or row in the axis given at the index given */
+Matrix* remove(Matrix *A, int index, int axis)
+{
+	if (axis==0)
+	{
+		return remove_r(A,index);
+	}
+	return remove_c(A,index);
+}
 
 /*gets a column as a 1-D array (useful for operations with columns)*/
 Vector* get_col(Matrix *matrix, int col_idx)
@@ -196,6 +349,35 @@ Vector* mul(Vector* u, Vector* v)
 	}
 	long double *w_pt = new long double[u->size];
 	for (int i = 0; i < u->size; ++i) w_pt[i] = (*(u->V+i)) * (*(v->V+i));
+	return new_vector(w_pt,u->size);
+}
+
+/* elemtn wise division of two Vectors u,v */
+Vector* div(Vector* u, Vector* v)
+{
+	if(u->size != v->size)
+	{
+		printf("Error in div(u,v): Vector sizes must be the same\n");
+		return NULL;
+	}
+	long double *w_pt = new long double[u->size];
+	for (int i = 0; i < u->size; ++i) w_pt[i] = (*(u->V+i)) / (*(v->V+i));
+	return new_vector(w_pt,u->size);
+}
+
+/* element-wise avsolute of a vector */
+Vector* absolute(Vector *u) 
+{
+	long double *w_pt = new long double[u->size];
+	for (int i = 0; i < u->size; ++i) w_pt[i] = abs(*(u->V+i));
+	return new_vector(w_pt,u->size);
+}
+
+/* get only the signs of the elemesnt of a vector */
+Vector* sign(Vector *u) 
+{
+	long double *w_pt = new long double[u->size];
+	for (int i = 0; i < u->size; ++i) w_pt[i] = sign(*(u->V+i));
 	return new_vector(w_pt,u->size);
 }
 
@@ -290,7 +472,7 @@ void swap(Vector* u, int a, int b)
 	*(u->V+b) = temp;
 }
 /* swap 2 rows from different matrices */
-void swap(Matrix *A, Matrix *B, int row_a, int row_b)
+void swap(Matrix *&A, Matrix *&B, int row_a, int row_b)
 {
 	if (A->cols != B->cols)
 	{
@@ -371,6 +553,16 @@ void print(Matrix *A)
 	for (int i = 0; i < A->rows; ++i) print(new_vector(*(A->M+i),A->cols));
 }
 
+/* print shape */
+void print_shape(Matrix *A, char* label)
+{
+	printf("shape of %s= (%d,%d)\n", label, A->rows, A->cols);
+}
+void print_shape(Vector *v, char* label)
+{
+	printf("shape of %s = (%d, )\n",label, v->size);
+}
+
 Matrix* getCofactor(Matrix *M, int p, int q)
 {
 	int i = 0, j = 0;
@@ -395,14 +587,14 @@ Matrix* getCofactor(Matrix *M, int p, int q)
 	return temp;
 }
 
-bool isSingular(Matrix *A)
+long double det(Matrix *A)
 {
 	if (A->rows == 1) return *(*(A->M));
 	long double D = 0;
 	int sign = 1; 
  
 	for (int f = 0; f < A->cols; f++) {
-		D += sign * (*(*(A->M)+f)) * isSingular(getCofactor(A, 0, f));
+		D += sign * (*(*(A->M)+f)) * det(getCofactor(A, 0, f));
 		sign = -sign;
 	}
 	return D;
@@ -421,7 +613,7 @@ Vector* solve(Matrix *A, Vector *b)
 		printf("Error in solve(A,b): Vector b must be same size as Matrix A order.\n");
 		return NULL;
 	}
-	if(isSingular(A) == 0)
+	if(det(A) == 0)
 	{
 		printf("Error in solve(A,b): Matrix A is singular and can't be solved.\n");
 		return NULL;
@@ -453,6 +645,49 @@ Vector* solve(Matrix *A, Vector *b)
 	}
 
 	return x;
+}
+
+/* adjoint of a matrix */
+Matrix* adjoint(Matrix *A)
+{
+	if (A->cols == 1)
+	{
+		Matrix *adj = new_matrix(1,1);
+		*(*adj->M) = 1;
+		return adj;
+	}
+	Matrix *adj = new_matrix(A->cols,A->cols);
+	int sign = 1;
+	for (int i = 0; i < A->cols; i++)
+	{
+		for (int j = 0; j < A->cols; j++)
+		{
+			sign = ((i+j)%2==0)? 1: -1;
+			*(*(adj->M+j)+i) = sign*det(getCofactor(A,i,j));
+		}
+	}
+	return adj;
+}
+
+/* inverse of a matrix */
+Matrix* inverse(Matrix *A)
+{
+	if (A->rows != A->cols)
+	{
+		printf("Error in inverse(A): Matrix A must be squared.\n");
+		return NULL;
+	}
+	long double D = det(A);
+	if (D == 0)
+	{
+		printf("Error in inverse(A): can't get inverse of singular  matrix.\n");
+	}
+	Matrix *inverse = new_matrix(A->cols, A->cols);
+	A = adjoint(A);
+	for (int i = 0; i < A->cols; ++i)
+		for (int j = 0; j < A->cols; ++j)
+			*(*(inverse->M+i)+j) = (*(*(A->M+i)+j))/D;
+	return inverse;
 }
 
 /*#######################  FILE READING  #########################*/
@@ -495,19 +730,32 @@ Matrix* read_csv(char *filename, char separator, int rows, int fields)
 
 /*###################### ASCEND ALGORITHM ########################*/
 
+/* get minimax signs by te 4th method of the minimax theory document */
+Vector* get_signs(Matrix *inner)
+{
+	inner = transpose(inner);
+	Matrix *B = remove(inner,inner->cols-1,1);
+	Vector *f = get_col(inner,inner->cols-1);
+	Vector *signs = solve(B,f);
+	signs = append(signs,-1);
+	signs = sign(signs);
+	printf("Minimax signs:\n");
+	print(signs);
+	return signs;
+}
 
 /* calculates all the combinations of the degrees of the variables */
-Matrix *get_terms(Vector *degrees)
+Matrix* get_terms(Vector *deg)
 {
 	int comb = 1;
 	int temp = 1;
-	for(int i = 0; i < degrees->size; i++) comb *= *(degrees->V+i);
-	Matrix *terms = new_matrix(comb, degrees->size);
+	for(int i = 0; i < deg->size; i++) comb *= *(deg->V+i);
+	Matrix *terms = new_matrix(comb, deg->size);
 	for (int ci = terms->cols-1; ci >=0 ; ci--)
 	{
 		for (int ri = 0; ri < terms->rows; ri++)
 		{
-			int max = *(degrees->V+ci);
+			int max = *(deg->V+ci);
 			for (int di=0; di < max; di++,ri++)
 			{
 				for (int k = 0; k < temp; k++,ri++)
@@ -518,13 +766,13 @@ Matrix *get_terms(Vector *degrees)
 			}
 			ri--;
 		}
-		temp *= *(degrees->V+ci);
+		temp *= *(deg->V+ci);
 	}
 	return terms;
 }
 
 /* maps the data into new dataset with the degrees of the variables given */
-Matrix *map(Matrix *data, Matrix *terms)
+Matrix* map(Matrix *data, Matrix *terms)
 {
 	if (data->cols-1 != terms->cols)
 	{
@@ -551,6 +799,115 @@ Matrix *map(Matrix *data, Matrix *terms)
 	return m_data;
 }
 
+Vector* get_coeff(Matrix *B, Vector *f, long double &eps_th)
+{
+	Vector *C = mul(B,f);
+	eps_th = *C->V;
+	return remove(C,0);
+}
+
+/* test coefficients in the outter set.
+   input
+      -outter: outter set
+      -coefficients: vector of coefficients(with the error removed)
+      -eps_ph: refernce variable where error is stored 
+      -sgn: reference variable where sign of the error is stored
+      -idx: index of the vector with the maximum error */
+void test_coeff(Matrix *outter, Vector *coefficients, long double &eps_ph, int &sgn, int &idx)
+{	
+	long double error, abs_err;
+	eps_ph = -10000;
+	for (int i = 0; i < outter->rows; ++i)
+	{
+		Vector *out_x = new_vector(*(outter->M+i),0,outter->cols-1);
+
+		long double y = *(*(outter->M+i)+outter->cols-1);
+		error = y - dot(coefficients,out_x);
+		abs_err = abs(error);
+		if(abs_err > eps_ph)
+		{
+			eps_ph = abs_err;
+			idx = i;
+			sgn = sign(error);
+		}
+	}
+}
+
+/* gets new inverse with the lambdas and the index  of the maximum value
+   at the inner set.
+   input
+   	   -B: inverse matrix of A(inner set)
+   	   -betha: index of the maximum internal error
+   	   -lambdas: vector of lambdas calculated in the swapping step */
+void get_new_inverse(Matrix *&B, int betha, Vector *lambdas)
+{
+	for (int i = 0; i < B->rows; ++i)
+		*(*(B->M+i)+betha) /= *(lambdas->V+betha);
+	for (int i = 0; i < B->rows; ++i)
+		for (int j = 0; j < B->rows; ++j)
+			if (i!=betha) *(*(B->M+j)+i) -= (*(lambdas->V+i))*(*(*(B->M+j)+betha));
+}
+
+/* stabilizes data by adding neglectable random value */
+Matrix* stabilize(Matrix *A, long double factor)
+{
+	Matrix *S = new_matrix(A->rows,A->cols);
+	srand(time(NULL));
+	double random;
+	for (int i = 0; i < S->rows; ++i)
+	{
+		for (int j = 0; j < S->cols; ++j)
+		{
+			random = (double)rand() / (double)RAND_MAX ;
+			if(*(*(A->M+i)+j) == 0) 
+				*(*(S->M+i)+j) = *(*(A->M+i)+j) + random*factor;
+			else *(*(S->M+i)+j) = (*(*(A->M+i)+j)) * (1+random*factor);
+		}
+	}
+	return S;
+}
+
+/* swaps a vector from the inner set for the one in the outter set
+   whit the maximum external error.
+   input
+   	   -outter: outter set
+   	   -inner: inner set(matrix A)
+   	   -B: inverse matrix of A
+   	   -mu: sign of the external error 
+   	   -IE: index of the maximum external error
+   	output - None, the Matrices are passed by reference */
+void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, int IE)
+{
+
+	Vector *amp1 = insert(new_vector(*(remove(outter,outter->cols-1,1)->M+IE),outter->cols-1),0,mu);
+	Vector *lambdas = mul(amp1,B);
+	long double betha_max = -10000;
+	long double betha;
+	int bmi = -1; // betha max index
+	for (int i = 0; i < B->cols; ++i)
+	{
+		betha = mu * (*(lambdas->V+i)/(*(*(B->M)+i)));
+		if (betha > betha_max)
+		{
+			betha_max = betha;
+			bmi = i;
+		}
+	}
+	print_shape(inner,(char*)"inner");
+	print_shape(outter,(char*)"outter");
+	
+	*(*(inner->M+bmi)) = mu;
+	for (int i = 0; i < outter->cols; ++i)
+	{
+		long double temp = *(*(inner->M+bmi)+i+1);
+		*(*(inner->M+bmi)+i+1) = *(*(outter->M+IE)+i);
+		*(*(outter->M+IE)+i) = temp;
+	}
+
+	// calculate new inverse
+	get_new_inverse(B,bmi,lambdas);
+}
+
 /* ascend algorithm returns vector of coefficients C 
    input:
    		terms: matrix with the following format.
@@ -568,10 +925,17 @@ Matrix *map(Matrix *data, Matrix *terms)
    		Vector of coefficients for each term of the polynomial,
    		the first element is the minimax internal error.
    		[epsilon_theta, c1, c2, ..., cn] */
-Vector *ascend(Matrix *terms)
+Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 {
+	int IE, mu;
 	int m = terms->rows;
 	int M = m+1;
+	// long double eps_th,eps_ph;
+	Vector *c; // coefficient vector
+
+	long double stab_fac = 1e-6;
+	long double quasi = 0.05;
+	bool Q_F = true;
 
 	char* filename = (char*) malloc(100);
 	int rows = 0;
@@ -581,16 +945,51 @@ Vector *ascend(Matrix *terms)
 	scanf("%s",filename);
 	printf("data shape(rows fields):");
 	scanf("%d %d",&rows,&fields);
-	printf("\nshape typed:(%d,%d)",rows,fields);
 
 	// read data
-	Matrix *inner = read_csv(filename,'\t', 300, 4);
+	Matrix *outter = read_csv(filename,'\t', rows, fields);
 	
 	// map data
-	inner = map(inner, terms);
+	outter = map(outter, terms);
+
+	// stabilize data
+	outter = stabilize(outter, stab_fac);
 
 	// split data
-	Matrix *outter = sample(inner,M,true);
+	Matrix *inner = sample(outter,M,true);
+	
+	// get minimax signs
+	Vector *signs = get_signs(remove(inner,inner->cols-1,1));
+
+	// get matrix A
+	inner = insert(inner,0,signs,1); 
+
+	// get 1st inverse
+	Matrix *B = inverse(remove(inner,inner->cols-1,1)); 
+
+	int iteration = 1;
+
+	while(true)
+	{
+		//printf("check1\n");
+		c = get_coeff(B, get_col(inner,inner->cols-1), eps_th);
+		//printf("check2\n");
+		test_coeff(outter, c, eps_ph, mu, IE);
+		printf("IT[%d]: eps_th = %2.6Lf eps_ph = %2.6Lf\n",iteration, eps_th, eps_th);
+			if ((eps_th >= eps_ph) || (Q_F && abs(eps_th - eps_ph) <= quasi))
+		{
+			if (Q_F)
+			{
+				printf("quasi minimax achieved\n");
+			}
+			break;
+		}
+		else
+		{
+			swap_vector(outter, inner, B, mu, IE);
+		}
+		iteration++;
+	}
 	return NULL;
 
 }
@@ -598,17 +997,29 @@ Vector *ascend(Matrix *terms)
 
 int main(int argc, char const *argv[])
 {
-	// read terms file
-	// Matrix *terms = read_csv("test-terms",)
+	long double epsilon_th;
+	long double epsilon_ph;
 	Vector *deg = new_vector(3);
 	deg->V[0] = 2;
 	deg->V[1] = 2;
-	deg->V[2] = 3;
+	deg->V[2] = 2;
 	
 	Matrix *terms = get_terms(deg);
-	ascend(terms);
+	print_shape(terms,(char*)"terms");
+	print(terms);
+	Vector *c = ascend(terms, epsilon_th, epsilon_ph);
+	printf("Epsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
+	printf("coefficients found\n");
+	print(c);
+	// char *filename;
+	// scanf("%s",filename);
+	// Matrix *terms = read_csv(filename,'\t',3,3);
+	// print(algo);
+	// printf("\n");
+	// print(insert(algo,5,999.9));
 
 	return 0;
 }
+
 
 
