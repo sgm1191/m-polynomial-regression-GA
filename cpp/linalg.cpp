@@ -3,7 +3,7 @@
 #include <float.h>
 #include <math.h>
 #include <string.h>
-
+#include <time.h>
 
 /* ########################### OTHER OPERATORS ############################*/
 
@@ -16,12 +16,12 @@ int str2int(char *num)
 	return res;
 }
 /* char array must end with '\0' special character */
-double str2double(char *num)
+long double str2double(char *num)
 {
-	double res = 0;
+	long double res = 0;
 	int pw = 0;
 	int sign = 1;
-	if(strchr(num, '.') == NULL) return (double) str2int(num);
+	if(strchr(num, '.') == NULL) return (long double) str2int(num);
 	if (*num == '-'){ sign = -1; num++; }
 	for (int i = 0; *(num+i) != '.'; ++i, pw++);
 	while(*(num)!='.') res+= (int(*(num++))-48)*pow(10,--pw);
@@ -33,17 +33,17 @@ double str2double(char *num)
 /*#######################  LINEAR ALGEBRA MODULE  ############################*/
 
 typedef struct{
-	double* V;
+	long double* V;
 	int size;
 }Vector;
 
 typedef struct{
-	double** M;
+	long double** M;
 	int rows;
 	int cols;
 }Matrix;
 
-Vector* new_vector(double *v_pt, int size)
+Vector* new_vector(long double *v_pt, int size)
 {
 	Vector *v = (Vector*)malloc(sizeof(Vector));
 	v->V = v_pt;
@@ -54,7 +54,7 @@ Vector* new_vector(double *v_pt, int size)
 Vector* new_vector(int size)
 {
 	Vector *v = (Vector*)malloc(sizeof(Vector));
-	v->V = (double*)malloc(sizeof(double)*size);//new double[size];
+	v->V = (long double*)malloc(sizeof(long double)*size);//new long double[size];
 	v->size = size;
 	return v;
 
@@ -63,8 +63,8 @@ Vector* new_vector(int size)
 Matrix* new_matrix(int rows, int cols)
 {
 	Matrix *matrix = (Matrix*)malloc(sizeof(Matrix));
-	double **A = (double**) malloc(sizeof(double*)*rows);
-	for (int i = 0; i < rows; ++i) A[i] =  (double*) malloc(sizeof(double)*cols);
+	long double **A = (long double**) malloc(sizeof(long double*)*rows);
+	for (int i = 0; i < rows; ++i) A[i] =  (long double*) malloc(sizeof(long double)*cols);
 	matrix->M = A;
 	matrix->rows = rows;
 	matrix->cols = cols;
@@ -85,6 +85,14 @@ Matrix* transpose(Matrix *M)
 	for (int i = 0; i < T->rows; ++i)
 		for (int j = 0; j < T->cols; ++j) T->M[i][j] = M->M[j][i];
 	return T;
+}
+/* gets a subsection of the vector */
+Vector* sub(Vector *v, int ini, int fin)
+{
+	int len = fin-ini;
+	long double *v_pt = new long double[len];
+	for (int i = 0; i < len; i++, ini++) *(v_pt+i) = *(v->V+ini);
+	return new_vector(v_pt,len);
 }
 
 Matrix* append_c(Matrix *A, Vector *b)
@@ -119,11 +127,14 @@ Matrix* append_r(Matrix *A, Vector *b)
 	return B;
 }
 
+/* appends a vector at the end of a matrix 
+   in the axis given(0 for rows, 1 for cols)*/
 Matrix* append(Matrix *A, Vector *b, int axis)
 {
 	if (axis==0) return append_r(A,b);
 	return append_c(A,b);
 }
+
 
 /*gets a column as a 1-D array (useful for operations with columns)*/
 Vector* get_col(Matrix *matrix, int col_idx)
@@ -133,7 +144,7 @@ Vector* get_col(Matrix *matrix, int col_idx)
 		printf("Error in get_col(M,i): index of column is out of bounds.\n");
 		return NULL;
 	}
-	double* col_pt = new double[matrix->rows];
+	long double* col_pt = new long double[matrix->rows];
 	for (int i = 0; i < matrix->rows; ++i) col_pt[i] = *(*(matrix->M+i)+col_idx);
 	return new_vector(col_pt,matrix->rows);
 }
@@ -146,31 +157,31 @@ Vector* sum(Vector *u, Vector *v)
 		printf("Error in sum(u,v): Vector size must be the same\n");
 		return NULL;
 	}
-	double *w_pt = new double[u->size];
+	long double *w_pt = new long double[u->size];
 	for (int i = 0; i < u->size; ++i) w_pt[i] += (*(u->V+i))+(*(v->V+i));
 	return new_vector(w_pt,u->size);
 }
 
 /* sum of the elements of a Vector */
-double sum(Vector *u)
+long double sum(Vector *u)
 {
-	double sum = 0;
+	long double sum = 0;
 	for (int i = 0; i < u->size; ++i) sum += *(u->V+i);
 	return sum;
 }
 
 /* sum of a Vector and a scalar */
-Vector* sum(Vector* u, double scalar)
+Vector* sum(Vector* u, long double scalar)
 {
-	double *u_pt = new double[u->size];
+	long double *u_pt = new long double[u->size];
 	for (int i = 0; i < u->size; ++i) u_pt[i] = u->V[i] + scalar;
 	return new_vector(u_pt,u->size);
 }
 
 /* mul of a Vector and a scalar */
-Vector* mul(Vector* u, double scalar)
+Vector* mul(Vector* u, long double scalar)
 {
-	double *u_pt = new double[u->size];
+	long double *u_pt = new long double[u->size];
 	for (int i = 0; i < u->size; ++i) u_pt[i] = u->V[i] * scalar;
 	return new_vector(u_pt,u->size);
 }
@@ -183,21 +194,21 @@ Vector* mul(Vector* u, Vector* v)
 		printf("Error in mul(u,v): Vector sizes must be the same\n");
 		return NULL;
 	}
-	double *w_pt = new double[u->size];
+	long double *w_pt = new long double[u->size];
 	for (int i = 0; i < u->size; ++i) w_pt[i] = (*(u->V+i)) * (*(v->V+i));
 	return new_vector(w_pt,u->size);
 }
 
 /* product the elements of a Vector */
-double mul(Vector *u)
+long double mul(Vector *u)
 {
-	double mul = 1;
+	long double mul = 1;
 	for (int i = 0; i < u->size; ++i) mul *= *(u->V+i);
 	return mul;
 }
 
 /* dot product of two Vectors u,v*/
-double dot(Vector *u, Vector *v)
+long double dot(Vector *u, Vector *v)
 {
 	if(u->size != v->size)
 	{
@@ -230,7 +241,7 @@ Vector* mul(Matrix *A, Vector *u)
 		printf("Error in mul(A,v): Matrix A cols must be same size as u rows\n"); 
 		return NULL; 
 	}
-	double* v_pt = new double[A->rows];
+	long double* v_pt = new long double[A->rows];
 	for (int i = 0; i < A->rows; ++i)
 		v_pt[i] = dot(new_vector(*(A->M+i),A->cols),u);
 	return new_vector(v_pt,A->rows);
@@ -250,7 +261,7 @@ void swap_r(Matrix *M, int row_a, int row_b)
 {
 	for (int col_i = 0; col_i < M->cols; ++col_i)
 	{
-		double temp = *(*(M->M+row_a)+col_i);
+		long double temp = *(*(M->M+row_a)+col_i);
 		*(*(M->M+row_a)+col_i) = *(*(M->M+row_b)+col_i);
 		*(*(M->M+row_b)+col_i) = temp;
 	}
@@ -260,7 +271,7 @@ void swap_c(Matrix *M, int col_a, int col_b)
 {
 	for (int row_i = 0; row_i < M->rows; ++row_i)
 	{
-		double temp = *(*(M->M+row_i)+col_a);
+		long double temp = *(*(M->M+row_i)+col_a);
 		*(*(M->M+row_i)+col_a) = *(*(M->M+row_i)+col_b);
 		*(*(M->M+row_i)+col_b) = temp;
 	}
@@ -274,14 +285,53 @@ void swap(Matrix *M, int a, int b, int axis)
 /* swap  2 elements of a vector */
 void swap(Vector* u, int a, int b)
 {
-	double temp = *(u->V+a);
+	long double temp = *(u->V+a);
 	*(u->V+a) = *(u->V+b);
 	*(u->V+b) = temp;
 }
-
-double min(Vector* u, int &index)
+/* swap 2 rows from different matrices */
+void swap(Matrix *A, Matrix *B, int row_a, int row_b)
 {
-	double min = *(u->V);
+	if (A->cols != B->cols)
+	{
+		printf("Error in swap(A,B,row_a,row_b): matrices A and B must have same number of columns \n");
+		return;
+	}
+	for (int col = 0; col < A->cols; ++col)
+	{
+		long double temp = *(*(A->M+row_a)+col);
+		*(*(A->M+row_a)+col) = *(*(B->M+row_b)+col);
+		*(*(B->M+row_b)+col) = temp;
+	}
+}
+
+/* gets a random sample of a matrix A.
+   inplace = substracts the sample from the original */
+Matrix* sample(Matrix *&A, int samp_size, bool inplace)
+{
+	//srand(90418); // semilla random
+	srand(time(NULL));
+	Matrix *S = new_matrix(samp_size, A->cols);
+	Matrix *new_A = new_matrix(A->rows-samp_size, A->cols);
+	int iA = 0; // index for original data matrix
+	int iS = 0; // index for sample matrix
+	int inA = 0; // index for remaining data matrix
+	int steps = int(A->rows/samp_size);
+	while (samp_size)
+	{
+		int samp_v = iA + rand() % steps;
+		while(iA < samp_v) *(new_A->M + inA++) = *(A->M + iA++);
+		samp_size--;
+		*(S->M + iS++) = *(A->M + iA++);
+	}
+	while(iA < A->rows) *(new_A->M + inA++) = *(A->M + iA++);;
+	if (inplace) A = new_A;
+	return S;
+}
+
+long double min(Vector* u, int &index)
+{
+	long double min = *(u->V);
 	for (int i = 1; i < u->size; ++i)
 	{
 		if (*(u->V+i) > min)
@@ -293,9 +343,9 @@ double min(Vector* u, int &index)
 	return min;
 }
 
-double max(Vector* u, int &index)
+long double max(Vector* u, int &index)
 {
-	double max = *(u->V);
+	long double max = *(u->V);
 	for (int i = 1; i < u->size; ++i)
 	{
 		if (*(u->V+i) > max)
@@ -311,8 +361,8 @@ double max(Vector* u, int &index)
 void print(Vector *u)
 {
 	printf("[ ");
-	for (int i = 0; i < u->size; ++i) printf("%f ", *(u->V+i));
-	printf(" ]\n");
+	for (int i = 0; i < u->size; ++i) printf("%10.12Lf ", *(u->V+i));
+	printf("]\n");
 }
 
 /* prints a matrix */
@@ -348,7 +398,7 @@ Matrix* getCofactor(Matrix *M, int p, int q)
 bool isSingular(Matrix *A)
 {
 	if (A->rows == 1) return *(*(A->M));
-	double D = 0;
+	long double D = 0;
 	int sign = 1; 
  
 	for (int f = 0; f < A->cols; f++) {
@@ -386,7 +436,7 @@ Vector* solve(Matrix *A, Vector *b)
 	{
 		for(int i=j+1; i<m; i++)
 		{
-			double c= *(*(A_temp->M+i)+j)/(*(*(A_temp->M+j)+j));
+			long double c= *(*(A_temp->M+i)+j)/(*(*(A_temp->M+j)+j));
 			for(int k=0; k<m+1; k++)
 				*(*(A_temp->M+i)+k) = *(*(A_temp->M+i)+k)-c*(*(*(A_temp->M+j)+k));
 		}
@@ -397,7 +447,7 @@ Vector* solve(Matrix *A, Vector *b)
 	/* this loop is for backward substitution*/
 	for(int i=m-2; i>=0; i--)
 	{
-		double sum=0;
+		long double sum=0;
 		for(int j=i+1; j<m; j++) sum += *(*(A_temp->M+i)+j) * (*(x->V+j));
 		*(x->V+i) = (*(*(A_temp->M+i)+m)-sum)/(*(*(A_temp->M+i)+i));
 	}
@@ -408,11 +458,15 @@ Vector* solve(Matrix *A, Vector *b)
 /*#######################  FILE READING  #########################*/
 
 /*
-reads a csv file and return data matrix **M
+reads a csv file and return data matrix M
 */
 Matrix* read_csv(char *filename, char separator, int rows, int fields)
 {
 	FILE* stream = fopen(filename, "r");
+	if(stream == NULL)
+	{
+		printf("Error in read_csv(filename,sep,rows,fields): file does not exists.\n");
+	}
 	Matrix *data = new_matrix(rows, fields);
 	int c = fgetc(stream);
 	int row = 0;
@@ -439,52 +493,120 @@ Matrix* read_csv(char *filename, char separator, int rows, int fields)
 	return data;
 }
 
+/*###################### ASCEND ALGORITHM ########################*/
+
+
+/* calculates all the combinations of the degrees of the variables */
+Matrix *get_terms(Vector *degrees)
+{
+	int comb = 1;
+	int temp = 1;
+	for(int i = 0; i < degrees->size; i++) comb *= *(degrees->V+i);
+	Matrix *terms = new_matrix(comb, degrees->size);
+	for (int ci = terms->cols-1; ci >=0 ; ci--)
+	{
+		for (int ri = 0; ri < terms->rows; ri++)
+		{
+			int max = *(degrees->V+ci);
+			for (int di=0; di < max; di++,ri++)
+			{
+				for (int k = 0; k < temp; k++,ri++)
+				{
+					*(*(terms->M+ri)+ci) = di;
+				}
+				ri--;
+			}
+			ri--;
+		}
+		temp *= *(degrees->V+ci);
+	}
+	return terms;
+}
+
+/* maps the data into new dataset with the degrees of the variables given */
+Matrix *map(Matrix *data, Matrix *terms)
+{
+	if (data->cols-1 != terms->cols)
+	{
+		printf("Error in map(data,terms): data fields and terms columns must have the same size.\n");
+		return NULL;
+	}
+	
+	Matrix *m_data = new_matrix(data->rows,terms->rows+1); // +1 for the dependent variable
+
+	for (int i = 0; i < m_data->rows; i++)
+	{
+		for (int j = 0; j < m_data->cols-1; j++)
+		{
+			long double value = 1;
+			for (int k = 0; k < terms->cols; k++)
+			{
+				//value = data[i][k]^terms[j][k]
+				value *= powl((*(*(data->M+i)+k)),(*(*(terms->M+j)+k)));
+			}
+			*(*(m_data->M+i)+j) = value;
+		}
+		*(*(m_data->M+i) + m_data->cols-1) = *(*(data->M+i) + data->cols-1);
+	}
+	return m_data;
+}
+
+/* ascend algorithm returns vector of coefficients C 
+   input:
+   		terms: matrix with the following format.
+   		if there are originally 5 variables
+   		each array is a term which 
+   		has the exponent for each variable.
+   		example:
+
+   		       v1, v2, v3, v4, v5
+   		t1	[ [ 0,  1,  2,  1,  3],
+   		t2	  [ 1,  2,  3,  1,  0],
+   		...	  ...
+   		tn	  [ 1,  2,  3,  4,  1] ]
+   	output:
+   		Vector of coefficients for each term of the polynomial,
+   		the first element is the minimax internal error.
+   		[epsilon_theta, c1, c2, ..., cn] */
+Vector *ascend(Matrix *terms)
+{
+	int m = terms->rows;
+	int M = m+1;
+
+	char* filename = (char*) malloc(100);
+	int rows = 0;
+	int fields = 0;
+	
+	printf("Training filename: \n");
+	scanf("%s",filename);
+	printf("data shape(rows fields):");
+	scanf("%d %d",&rows,&fields);
+	printf("\nshape typed:(%d,%d)",rows,fields);
+
+	// read data
+	Matrix *inner = read_csv(filename,'\t', 300, 4);
+	
+	// map data
+	inner = map(inner, terms);
+
+	// split data
+	Matrix *outter = sample(inner,M,true);
+	return NULL;
+
+}
 
 
 int main(int argc, char const *argv[])
 {
-	// int v_size = 3;
-	// int rows = 3;
-	// int cols = 3;
-	// Vector *u = new_vector(v_size-1);
-	// Vector *v = new_vector(v_size);
-	// Vector *b = new_vector(3);
-	// Matrix *A = new_matrix(3,3);
-	// Matrix *B = new_matrix(3,2);
-	// Matrix *I = new_I_matrix(3);
-	// A->M[0][0] = 1;
-	// A->M[0][1] = 2;
-	// A->M[0][2] = 3;
-	// A->M[1][0] = 4;
-	// A->M[1][1] = 5;
-	// A->M[1][2] = 6;
-	// A->M[2][0] = 7;
-	// A->M[2][1] = 8;
-	// A->M[2][2] = 9;
+	// read terms file
+	// Matrix *terms = read_csv("test-terms",)
+	Vector *deg = new_vector(3);
+	deg->V[0] = 2;
+	deg->V[1] = 2;
+	deg->V[2] = 3;
 	
-	// B->M[0][0] = 2;
-	// B->M[0][1] = 2;
-	// B->M[1][0] = 1;
-	// B->M[1][1] = 0;
-	// B->M[2][0] = 1;
-	// B->M[2][1] = 1;
-
-	// u->V[0] = 3;
-	// u->V[1] = 2;
-	// v->V[0] = 1;
-	// v->V[1] = 2;
-	// v->V[2] = 3;
-	// b->V[0] = 4;
-	// b->V[1] = 3;
-	// b->V[2] = 5;
-	char *filename_ = (char*)malloc(sizeof(char)*1000);
-	printf("\nname of the file: ");
-	scanf("%s",filename_);
-	//printf("number parsed: %f\n", str2double(filename_));
-	Matrix *data = read_csv(filename_,'\t',1000,23);
-	printf("data read: \n");
-	print(data);
-	// Matrix *data = read_csv(filename_,',');
+	Matrix *terms = get_terms(deg);
+	ascend(terms);
 
 	return 0;
 }
