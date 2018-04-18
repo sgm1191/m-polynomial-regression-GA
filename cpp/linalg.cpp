@@ -894,7 +894,6 @@ Vector* lassol(Matrix *XY_cap)
 		*(lambda->V+i) = (*(*(XY->M+i)+dim) - sum)/(*(*(XY->M+i)+i));
 	}
 	return lambda;
-
 }
 
 /* get minimax signs by te 4th method of the minimax theory document */
@@ -907,8 +906,8 @@ Vector* get_signs(Matrix *inner)
 	//Vector *signs = lassol(inner);
 	signs = append(signs,-1);
 	signs = sign(signs);
-	printf("Minimax signs:\n");
-	print(signs);
+	// printf("Minimax signs:\n");
+	// print(signs);
 	return signs;
 }
 
@@ -971,6 +970,9 @@ Vector* get_coeff(Matrix *B, Vector *f, long double &eps_th)
 {
 	Vector *C = mul(B,f);
 	eps_th = *C->V;
+	// printf("coefficients:\n");
+	// print(C);
+	// printf("\n");
 	return remove(C,0);
 }
 
@@ -1054,8 +1056,6 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 
 	Vector *amp1 = insert(new_vector(*(remove(outter,outter->cols-1,1)->M+IE),outter->cols-1),0,mu);
 	Vector *lambdas = mul(amp1,B);
-	// printf("Lambda Vector:\n");
-	// print(lambdas);
 	long double betha_max = -10000;
 	long double betha;
 	int bmi = -1; // betha max index
@@ -1069,7 +1069,7 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 		}
 	}
 
-	//printf("Swapping in: %d out: %d\n", bmi, IE);
+	printf(" Swapping %d for %d\n", bmi+1, IE+inner->cols);
 	
 	*(*(inner->M+bmi)) = mu;
 	for (int i = 0; i < outter->cols; ++i)
@@ -1078,6 +1078,9 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 		*(*(inner->M+bmi)+i+1) = *(*(outter->M+IE)+i);
 		*(*(outter->M+IE)+i) = temp;
 	}
+	// printf("\nLambda Vector:\n");
+	// print(lambdas);
+	// printf("\n");
 
 	// calculate new inverse
 	get_new_inverse(B,bmi,lambdas);
@@ -1122,21 +1125,27 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 	scanf("%d %d",&rows,&fields);
 	// read data
 	Matrix *outter = read_csv(filename,'\t', rows, fields);
+	// printf("Data:\n");
+	// print(outter);
+	// printf("\n");
 	// map data
 	outter = map(outter, terms);
 	// stabilize data
 	outter = stabilize(outter, stab_fac);
 	// split data
-	//Matrix *inner = sample(outter,M,true);
 	Matrix *inner = first(outter,M,true);
+	// printf("Inner set:\n");
+	// print(inner);
+	// printf("\nOutter set:\n");
+	// print(outter);
 	// get minimax signs
 	Vector *signs = get_signs(remove(inner,inner->cols-1,1));
 	// get matrix A
 	inner = insert(inner,0,signs,1); 
 	// get 1st inverse
 	Matrix *B = inverse(remove(inner,inner->cols-1,1));
-	printf("Identity:\n");
-	print(mul(B,remove(inner,inner->cols-1,1)));
+	// printf("Identity:\n");
+	// print(mul(B,remove(inner,inner->cols-1,1)));
 	int iteration = 1;
 	char cont_flag;
 
@@ -1148,8 +1157,8 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 		// printf("coefficients:\n");
 		// print(c);
 		epsilon_ph = test_coeff(outter, c, mu, IE);
-		printf("IT[%d]: eps_th = %4.6Lf eps_ph = %4.6Lf at index %d\n",iteration, epsilon_th, epsilon_ph, IE);
-			if ((epsilon_th >= epsilon_ph) || (Q_F && abs(epsilon_th - epsilon_ph) <= quasi))
+		printf("\n IT[%d]: eps_th = %4.10Lf eps_ph = %4.10Lf ",iteration, epsilon_th, epsilon_ph);
+		if ((epsilon_th >= epsilon_ph) || (Q_F && fabsl(epsilon_th - epsilon_ph) <= quasi))
 		{
 			if (Q_F)
 			{
@@ -1186,8 +1195,8 @@ int main(int argc, char const *argv[])
 	print_shape(terms,(char*)"terms");
 	print(terms);
 	Vector *c = ascend(terms, epsilon_th, epsilon_ph);
-	printf("Epsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
-	printf("coefficients found\n");
+	printf("\nEpsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
+	printf("\ncoefficients found\n");
 	print(c);
 	// char *filename;
 	// scanf("%s",filename);
