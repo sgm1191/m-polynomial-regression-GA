@@ -96,6 +96,30 @@ Matrix* new_I_matrix(int size)
 	return M;
 }
 
+/* print shape */
+void print_shape(Matrix *A, char* label)
+{
+	printf("shape of %s= (%d,%d)\n", label, A->rows, A->cols);
+}
+
+void print_shape(Vector *v, char* label)
+{
+	printf("shape of %s = (%d, )\n",label, v->size);
+}
+
+Matrix* copy(Matrix *A)
+{
+	Matrix *M = new_matrix(A->rows,A->cols);
+	for (int i = 0; i < A->rows; ++i)
+	{
+		for (int j = 0; j < A->cols; ++j)
+		{
+			*(*(M->M+i)+j) = *(*(A->M+i)+j);
+		}
+	}
+	return M;
+}
+
 Matrix* transpose(Matrix *M)
 {
 	Matrix *T = new_matrix(M->cols,M->rows);
@@ -439,7 +463,7 @@ Vector* mul(Vector *u, Matrix *A)
 }
 
 /* swap rows of a matrix */
-void swap_r(Matrix *M, int row_a, int row_b)
+void swap_r(Matrix *&M, int row_a, int row_b)
 {
 	for (int col_i = 0; col_i < M->cols; ++col_i)
 	{
@@ -449,7 +473,7 @@ void swap_r(Matrix *M, int row_a, int row_b)
 	}
 }
 /* swap columns of a matrix */
-void swap_c(Matrix *M, int col_a, int col_b)
+void swap_c(Matrix *&M, int col_a, int col_b)
 {
 	for (int row_i = 0; row_i < M->rows; ++row_i)
 	{
@@ -459,7 +483,7 @@ void swap_c(Matrix *M, int col_a, int col_b)
 	}
 }
 /* swap two columns or rows of a vector */
-void swap(Matrix *M, int a, int b, int axis)
+void swap(Matrix *&M, int a, int b, int axis)
 {
 	if (axis==0) swap_r(M, a, b);
 	else swap_c(M, a, b);
@@ -511,6 +535,30 @@ Matrix* sample(Matrix *&A, int samp_size, bool inplace)
 	return S;
 }
 
+/* get first n rows of a matrix as another matrix */
+Matrix* first(Matrix *&A, int samp_size, bool inplace)
+{
+	Matrix *S = new_matrix(samp_size, A->cols);
+	for (int i = 0; i < samp_size; i++)
+	{
+		for (int j = 0; j < A->cols; j++)
+		{
+			*(*(S->M+i)+j) = *(*(A->M+i)+j);
+		}
+	}
+	if (!inplace) return S;
+	Matrix *residual = new_matrix(A->rows - samp_size, A->cols);
+	for (int i = 0; i < residual->rows; i++)
+	{
+		for (int j = 0; j < A->cols; j++)
+		{
+			*(*(residual->M+i)+j) = *(*(A->M+samp_size+i)+j);
+		}
+	}
+	A = residual;
+	return S;
+}
+
 long double min(Vector* u, int &index)
 {
 	long double min = *(u->V);
@@ -553,16 +601,6 @@ void print(Matrix *A)
 	for (int i = 0; i < A->rows; ++i) print(new_vector(*(A->M+i),A->cols));
 }
 
-/* print shape */
-void print_shape(Matrix *A, char* label)
-{
-	printf("shape of %s= (%d,%d)\n", label, A->rows, A->cols);
-}
-void print_shape(Vector *v, char* label)
-{
-	printf("shape of %s = (%d, )\n",label, v->size);
-}
-
 Matrix* getCofactor(Matrix *M, int p, int q)
 {
 	int i = 0, j = 0;
@@ -601,26 +639,27 @@ long double det(Matrix *A)
 }
 
 /* returns Vector x of coefficients */
-Vector* solve(Matrix *A, Vector *b)
+Vector* solve(Matrix *XY)
 {
-	if (A->rows != A->cols)
-	{
-		printf("Error in solve(A,b): Matrix A must be squared.\n");
-		return NULL;
-	}
-	if (A->rows != b->size)
-	{
-		printf("Error in solve(A,b): Vector b must be same size as Matrix A order.\n");
-		return NULL;
-	}
-	if(det(A) == 0)
-	{
-		printf("Error in solve(A,b): Matrix A is singular and can't be solved.\n");
-		return NULL;
-	}
+	// if (A->rows != A->cols)
+	// {
+	// 	printf("Error in solve(A,b): Matrix A must be squared.\n");
+	// 	return NULL;
+	// }
+	// if (A->rows != b->size)
+	// {
+	// 	printf("Error in solve(A,b): Vector b must be same size as Matrix A order.\n");
+	// 	return NULL;
+	// }
+	// if(det(A) == 0)
+	// {
+	// 	printf("Error in solve(A,b): Matrix A is singular and can't be solved.\n");
+	// 	return NULL;
+	// }
 
-	int m = A->rows;
-	Matrix *A_temp = append(A,b,1);
+	int m = XY->rows;
+	//Matrix *A_temp = append(A,b,1);
+	Matrix *A_temp = copy(XY);
 	Vector *x = new_vector(m);
 
 	/* loop for the generation of upper triangular matrix*/
@@ -669,25 +708,79 @@ Matrix* adjoint(Matrix *A)
 	return adj;
 }
 
-/* inverse of a matrix */
 Matrix* inverse(Matrix *A)
 {
-	if (A->rows != A->cols)
+	int dim = A->cols;
+	Matrix *Ix = new_I_matrix(dim);
+	Matrix *X = copy(A);
+
+	// scale matrices
+	for (int i = 0; i < dim; i++)
 	{
-		printf("Error in inverse(A): Matrix A must be squared.\n");
-		return NULL;
+		long double r_max = fabsl(*(*(X->M+i)));
+		for (int j = 1; j < dim; j++)
+			r_max = fmaxl(fabsl(*(*(X->M+i)+j)), r_max);
+		if (r_max == 0)
+			printf("Error in inverse(A): can't get inverse, unstable matrix.\n");
+		long double scale = 1/r_max;
+		for (int j = 0; j < dim; j++)
+		{
+			*(*(X->M+i)+j) *= scale;
+			if (i==j) *(*(Ix->M+i)+j) = scale;
+		}
 	}
-	long double D = det(A);
-	if (D == 0)
+
+	// put largest element in pivot position
+	int ipiv;
+	for (int k = 0; k < dim-1; k++)
 	{
-		printf("Error in inverse(A): can't get inverse of singular  matrix.\n");
+		long double temp;
+		long double big = 0;
+		for (int i = k; i < dim; i++)
+		{
+			temp = fabsl(*(*(X->M+ i)+ k));
+			if (big < temp)
+			{
+				big = temp;
+				ipiv = i;
+			}
+		}
+		if (big == 0)
+			printf("Error in inverse(A): can't get inverse, unstable matrix.\n");
+		if (ipiv != k)
+		{
+			swap(X,ipiv,k,0);
+			swap(Ix,ipiv,k,0);
+		}
+
+		// eliminate X(k) from equations k+1, k+2, ..., k+dim
+		long double quot;
+		for (int i = k+1; i < dim; i++)
+		{
+			quot = *(*(X->M+ i)+ k) / (*(*(X->M+ k)+ k));
+
+			for (int j = k+1; j < dim; j++)
+				*(*(X->M+ i)+ j) -= (*(*(X->M+ k)+ j)) * quot;
+
+			for (int j = 0; j < dim; j++)
+				*(*(Ix->M+ i)+ j) -= (*(*(Ix->M+ k)+ j)) * quot;
+		}
 	}
-	Matrix *inverse = new_matrix(A->cols, A->cols);
-	A = adjoint(A);
-	for (int i = 0; i < A->cols; ++i)
-		for (int j = 0; j < A->cols; ++j)
-			*(*(inverse->M+i)+j) = (*(*(A->M+i)+j))/D;
-	return inverse;
+	if (*(*(X->M+dim-1)+dim-1) == 0)
+			printf("Error in inverse(A): can't get inverse, unstable matrix.\n");
+	// back substitution
+	for (int l = 0; l < dim; l++)
+	{
+		*(*(Ix->M+dim-1)+l) /= (*(*(X->M+dim-1)+dim-1));
+		for (int i = dim-2; i >= 0; i--)
+		{
+			long double sum = 0;
+			for (int j = i+1; j < dim; j++)
+				sum += *(*(X->M+i)+j) * (*(*(Ix->M+j)+l));
+			*(*(Ix->M+i)+l) = (*(*(Ix->M+i)+l) - sum)/(*(*(X->M+i)+i));
+		}
+	}
+	return Ix;
 }
 
 /*#######################  FILE READING  #########################*/
@@ -730,13 +823,88 @@ Matrix* read_csv(char *filename, char separator, int rows, int fields)
 
 /*###################### ASCEND ALGORITHM ########################*/
 
+/* solve system of linear equations for finding the minimax signs the first time */
+Vector* lassol(Matrix *XY_cap)
+{
+	Matrix *XY = copy(XY_cap);
+	Vector *lambda = new_vector(XY->rows);
+	int dim = XY->rows;
+	int dimp1 = XY->cols;
+	// scale each row to its max elements
+	for (int i = 0; i < dim; i++)
+	{
+		long double r_max = fabsl(*(*(XY->M+i)));
+		for (int j = 1; j < dim; j++)
+			r_max = fmaxl(fabsl(*(*(XY->M+i)+j)), r_max);
+		if (r_max == 0)
+		{
+			printf("Error in lassol(A): can't solve, unstable system.\n");
+			return NULL;
+		}
+		long double scale = 1/r_max;
+		for (int j = 0; j < dim; j++)
+			*(*(XY->M+ i)+ j) *= scale;
+	}
+
+	// put largest element in column i
+	int ipiv;
+	for (int k = 0; k < dim-1; k++)
+	{
+		long double temp;
+		long double big = 0;
+		for (int i = k; i < dim; i++)
+		{
+			temp = fabsl(*(*(XY->M+ i)+ k));
+			if (big < temp)
+			{
+				big = temp;
+				ipiv = i;
+			}
+		}
+		if (big == 0)
+		{
+			printf("Error in lassol(A): can't solve, unstable system.\n");
+			return NULL;
+		}
+		// exchange column with the largest element
+		if (ipiv != k) swap(XY,ipiv,k,0);
+
+		// eliminate all in column except first
+		long double quot;
+		for (int i = k+1; i < dim; i++)
+		{
+			quot = *(*(XY->M+ i)+ k) / (*(*(XY->M+ k)+ k));
+			for (int j = k+1; j < dim; j++)
+				*(*(XY->M+ i)+ j) -= (*(*(XY->M+ k)+ j)) * quot;
+		}
+	}
+	
+	if (*(*(XY->M+dim-1)+dim-1) == 0)
+	{
+		printf("Error in lassol(A): can't solve, unstable system.\n");
+		return NULL;
+	}
+	// back substitution
+	*(lambda->V+dim-1) = (*(*(XY->M+dim-1)+dim))/(*(*(XY->M+dim-1)+dim-1));
+	for (int i = dim-2; i >= 0; i--)
+	{
+		long double sum = 0;
+		for (int j = i+1; j < dim; j++)
+			sum += *(*(XY->M+i)+j) * (*(lambda->V+j));
+		*(lambda->V+i) = (*(*(XY->M+i)+dim) - sum)/(*(*(XY->M+i)+i));
+	}
+	return lambda;
+
+}
+
 /* get minimax signs by te 4th method of the minimax theory document */
 Vector* get_signs(Matrix *inner)
 {
 	inner = transpose(inner);
-	Matrix *B = remove(inner,inner->cols-1,1);
-	Vector *f = get_col(inner,inner->cols-1);
-	Vector *signs = solve(B,f);
+	// Matrix *B = remove(inner,inner->cols-1,1);
+	// Vector *f = get_col(inner,inner->cols-1);
+	Vector *signs = solve(inner);
+	//Vector *signs = lassol(inner);
 	signs = append(signs,-1);
 	signs = sign(signs);
 	printf("Minimax signs:\n");
@@ -813,17 +981,20 @@ Vector* get_coeff(Matrix *B, Vector *f, long double &eps_th)
       -eps_ph: refernce variable where error is stored 
       -sgn: reference variable where sign of the error is stored
       -idx: index of the vector with the maximum error */
-void test_coeff(Matrix *outter, Vector *coefficients, long double &eps_ph, int &sgn, int &idx)
+long double test_coeff(Matrix *outter, Vector *coefficients, int &sgn, int &idx)
 {	
 	long double error, abs_err;
-	eps_ph = -10000;
+	long double eps_ph;
+	eps_ph = -100000;
 	for (int i = 0; i < outter->rows; ++i)
 	{
-		Vector *out_x = new_vector(*(outter->M+i),0,outter->cols-1);
+		long double y_cap = 0;
+		for (int j = 0; j < coefficients->size; j++)
+			y_cap += (*(coefficients->V+j)) * (*(*(outter->M+i)+j));
 
-		long double y = *(*(outter->M+i)+outter->cols-1);
-		error = y - dot(coefficients,out_x);
-		abs_err = abs(error);
+		error = *(*(outter->M+i)+outter->cols-1) - y_cap;
+		// printf("Error at index %d = %Lf\n", i, error);
+		abs_err = fabsl(error);
 		if(abs_err > eps_ph)
 		{
 			eps_ph = abs_err;
@@ -831,6 +1002,7 @@ void test_coeff(Matrix *outter, Vector *coefficients, long double &eps_ph, int &
 			sgn = sign(error);
 		}
 	}
+	return eps_ph;
 }
 
 /* gets new inverse with the lambdas and the index  of the maximum value
@@ -842,10 +1014,11 @@ void test_coeff(Matrix *outter, Vector *coefficients, long double &eps_ph, int &
 void get_new_inverse(Matrix *&B, int betha, Vector *lambdas)
 {
 	for (int i = 0; i < B->rows; ++i)
-		*(*(B->M+i)+betha) /= *(lambdas->V+betha);
+		*(*(B->M+i)+betha) =  *(*(B->M+i)+betha) / *(lambdas->V+betha);
+
 	for (int i = 0; i < B->rows; ++i)
 		for (int j = 0; j < B->rows; ++j)
-			if (i!=betha) *(*(B->M+j)+i) -= (*(lambdas->V+i))*(*(*(B->M+j)+betha));
+			if (i!=betha) *(*(B->M+j)+i) = *(*(B->M+j)+i) - (*(lambdas->V+i)) * (*(*(B->M+j)+betha));
 }
 
 /* stabilizes data by adding neglectable random value */
@@ -881,6 +1054,8 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 
 	Vector *amp1 = insert(new_vector(*(remove(outter,outter->cols-1,1)->M+IE),outter->cols-1),0,mu);
 	Vector *lambdas = mul(amp1,B);
+	// printf("Lambda Vector:\n");
+	// print(lambdas);
 	long double betha_max = -10000;
 	long double betha;
 	int bmi = -1; // betha max index
@@ -893,8 +1068,8 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 			bmi = i;
 		}
 	}
-	print_shape(inner,(char*)"inner");
-	print_shape(outter,(char*)"outter");
+
+	//printf("Swapping in: %d out: %d\n", bmi, IE);
 	
 	*(*(inner->M+bmi)) = mu;
 	for (int i = 0; i < outter->cols; ++i)
@@ -930,7 +1105,7 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 	int IE, mu;
 	int m = terms->rows;
 	int M = m+1;
-	// long double eps_th,eps_ph;
+	long double epsilon_th,epsilon_ph;
 	Vector *c; // coefficient vector
 
 	long double stab_fac = 1e-6;
@@ -945,38 +1120,36 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 	scanf("%s",filename);
 	printf("data shape(rows fields):");
 	scanf("%d %d",&rows,&fields);
-
 	// read data
 	Matrix *outter = read_csv(filename,'\t', rows, fields);
-	
 	// map data
 	outter = map(outter, terms);
-
 	// stabilize data
 	outter = stabilize(outter, stab_fac);
-
 	// split data
-	Matrix *inner = sample(outter,M,true);
-	
+	//Matrix *inner = sample(outter,M,true);
+	Matrix *inner = first(outter,M,true);
 	// get minimax signs
 	Vector *signs = get_signs(remove(inner,inner->cols-1,1));
-
 	// get matrix A
 	inner = insert(inner,0,signs,1); 
-
 	// get 1st inverse
-	Matrix *B = inverse(remove(inner,inner->cols-1,1)); 
-
+	Matrix *B = inverse(remove(inner,inner->cols-1,1));
+	printf("Identity:\n");
+	print(mul(B,remove(inner,inner->cols-1,1)));
 	int iteration = 1;
+	char cont_flag;
 
 	while(true)
 	{
 		//printf("check1\n");
-		c = get_coeff(B, get_col(inner,inner->cols-1), eps_th);
+		c = get_coeff(B, get_col(inner,inner->cols-1), epsilon_th);
 		//printf("check2\n");
-		test_coeff(outter, c, eps_ph, mu, IE);
-		printf("IT[%d]: eps_th = %2.6Lf eps_ph = %2.6Lf\n",iteration, eps_th, eps_th);
-			if ((eps_th >= eps_ph) || (Q_F && abs(eps_th - eps_ph) <= quasi))
+		// printf("coefficients:\n");
+		// print(c);
+		epsilon_ph = test_coeff(outter, c, mu, IE);
+		printf("IT[%d]: eps_th = %4.6Lf eps_ph = %4.6Lf at index %d\n",iteration, epsilon_th, epsilon_ph, IE);
+			if ((epsilon_th >= epsilon_ph) || (Q_F && abs(epsilon_th - epsilon_ph) <= quasi))
 		{
 			if (Q_F)
 			{
@@ -987,22 +1160,27 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 		else
 		{
 			swap_vector(outter, inner, B, mu, IE);
+			// printf(" \n");
+			// print(mul(remove(inner,inner->cols-1,1), B));
 		}
+		// printf("Next? (y/n): ");
+		// scanf("%c",&cont_flag);
+		// if(cont_flag=='n') break;
 		iteration++;
 	}
-	return NULL;
-
+	eps_ph = epsilon_ph;
+	eps_th = epsilon_th;
+	return c;
 }
-
 
 int main(int argc, char const *argv[])
 {
 	long double epsilon_th;
 	long double epsilon_ph;
 	Vector *deg = new_vector(3);
-	deg->V[0] = 2;
-	deg->V[1] = 2;
-	deg->V[2] = 2;
+	deg->V[0] = 3;
+	deg->V[1] = 3;
+	deg->V[2] = 3;
 	
 	Matrix *terms = get_terms(deg);
 	print_shape(terms,(char*)"terms");
