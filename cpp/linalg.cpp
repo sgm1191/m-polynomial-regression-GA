@@ -916,6 +916,7 @@ Matrix* get_terms(Vector *deg)
 {
 	int comb = 1;
 	int temp = 1;
+	for (int i = 0; i < deg->size; i++) *(deg->V+i) = *(deg->V+i)+1; 
 	for(int i = 0; i < deg->size; i++) comb *= *(deg->V+i);
 	Matrix *terms = new_matrix(comb, deg->size);
 	for (int ci = terms->cols-1; ci >=0 ; ci--)
@@ -1069,7 +1070,7 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 		}
 	}
 
-	printf(" Swapping %d for %d\n", bmi+1, IE+inner->cols);
+	printf("%d\t|%d\n", bmi, IE+inner->cols);
 	
 	*(*(inner->M+bmi)) = mu;
 	for (int i = 0; i < outter->cols; ++i)
@@ -1113,68 +1114,60 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 
 	long double stab_fac = 1e-6;
 	long double quasi = 0.05;
-	bool Q_F = true;
+	char c_Q_F;
+	bool Q_F = false;
 
 	char* filename = (char*) malloc(100);
 	int rows = 0;
 	int fields = 0;
 	
+	// read parameters
 	printf("Training filename: \n");
 	scanf("%s",filename);
-	printf("data shape(rows fields):");
+	printf("\ndata shape(rows fields): ");
 	scanf("%d %d",&rows,&fields);
-	// read data
+	printf("\nstabilization factor: ");
+	scanf("%Lf", &stab_fac);
+	printf("\nquasi minimax?(y/n):");
+	scanf("%c",&c_Q_F);
+	Q_F = (c_Q_F == 'y');
+	if(Q_F)
+	{
+		printf("\nquasi minimax value: ");
+		scanf("%Lf",&quasi);
+	}
+	printf("\n");
+
+	// read data. *Note: all numbers must have decimal point,
+	// you can't write 1 in the file it must be writen at least as 1.0
 	Matrix *outter = read_csv(filename,'\t', rows, fields);
-	// printf("Data:\n");
-	// print(outter);
-	// printf("\n");
 	// map data
 	outter = map(outter, terms);
 	// stabilize data
 	outter = stabilize(outter, stab_fac);
 	// split data
 	Matrix *inner = first(outter,M,true);
-	// printf("Inner set:\n");
-	// print(inner);
-	// printf("\nOutter set:\n");
-	// print(outter);
 	// get minimax signs
 	Vector *signs = get_signs(remove(inner,inner->cols-1,1));
 	// get matrix A
 	inner = insert(inner,0,signs,1); 
 	// get 1st inverse
 	Matrix *B = inverse(remove(inner,inner->cols-1,1));
-	// printf("Identity:\n");
-	// print(mul(B,remove(inner,inner->cols-1,1)));
+
 	int iteration = 1;
 	char cont_flag;
-
+	// printf("It\tEpsilon TH\tEpsilonPH\tSwap\tFor\n");
 	while(true)
 	{
-		//printf("check1\n");
 		c = get_coeff(B, get_col(inner,inner->cols-1), epsilon_th);
-		//printf("check2\n");
-		// printf("coefficients:\n");
-		// print(c);
 		epsilon_ph = test_coeff(outter, c, mu, IE);
-		printf("\n IT[%d]: eps_th = %4.10Lf eps_ph = %4.10Lf ",iteration, epsilon_th, epsilon_ph);
+		printf("%d\t|%4.10Lf\t|%4.10Lf\t|",iteration, epsilon_th, epsilon_ph);
 		if ((epsilon_th >= epsilon_ph) || (Q_F && fabsl(epsilon_th - epsilon_ph) <= quasi))
 		{
-			if (Q_F)
-			{
-				printf("quasi minimax achieved\n");
-			}
+			if (Q_F) printf("\nquasi minimax achieved\n");
 			break;
 		}
-		else
-		{
-			swap_vector(outter, inner, B, mu, IE);
-			// printf(" \n");
-			// print(mul(remove(inner,inner->cols-1,1), B));
-		}
-		// printf("Next? (y/n): ");
-		// scanf("%c",&cont_flag);
-		// if(cont_flag=='n') break;
+		else swap_vector(outter, inner, B, mu, IE);
 		iteration++;
 	}
 	eps_ph = epsilon_ph;
@@ -1187,23 +1180,17 @@ int main(int argc, char const *argv[])
 	long double epsilon_th;
 	long double epsilon_ph;
 	Vector *deg = new_vector(3);
-	deg->V[0] = 3;
-	deg->V[1] = 3;
-	deg->V[2] = 3;
+	deg->V[0] = 2;
+	deg->V[1] = 2;
+	deg->V[2] = 2;
 	
 	Matrix *terms = get_terms(deg);
-	print_shape(terms,(char*)"terms");
-	print(terms);
+	// print_shape(terms,(char*)"terms");
+	// print(terms);
 	Vector *c = ascend(terms, epsilon_th, epsilon_ph);
 	printf("\nEpsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
 	printf("\ncoefficients found\n");
 	print(c);
-	// char *filename;
-	// scanf("%s",filename);
-	// Matrix *terms = read_csv(filename,'\t',3,3);
-	// print(algo);
-	// printf("\n");
-	// print(insert(algo,5,999.9));
 
 	return 0;
 }
