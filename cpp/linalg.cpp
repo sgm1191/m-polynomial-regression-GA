@@ -5,7 +5,7 @@
 #include <string.h>
 #include <time.h>
 
-/* ########################### OTHER OPERATORS ############################*/
+/*########################### OTHER OPERATORS ############################*/
 
 /* char array must end with '\0' special character */
 int str2int(char *num)
@@ -36,6 +36,24 @@ int sign(long double number)
 {
 	if(number < 0) return -1;
 	return 1;
+}
+
+/* calculates logarithm in base 2 of a number */
+double log2( double n )
+{  
+    return log( n ) / log( 2 );  
+} 
+
+/* generates a random double in (0,1] */
+double rand01()
+{
+	return (double)rand() / (double)RAND_MAX;
+}
+
+/* generates a random integer in [a,b] */
+int randint(int min, int max)
+{
+	return rand() % (max + 1 - min) + min;
 }
 
 /*#######################  LINEAR ALGEBRA MODULE  ############################*/
@@ -96,6 +114,11 @@ Matrix* new_I_matrix(int size)
 	return M;
 }
 
+// void destroy(Vector *u)
+// {
+// 	free(u->V);
+// }
+
 /* print shape */
 void print_shape(Matrix *A, char* label)
 {
@@ -130,10 +153,47 @@ Matrix* transpose(Matrix *M)
 /* gets a subsection of the vector */
 Vector* sub(Vector *v, int ini, int fin)
 {
+	if (ini == 0 && fin == v->size) return v;
+	if ( ini < 0 || fin > v->size)
+	{
+		printf("ERROR in sub(Vector, int, int): indices must be inside of vector bounds\n");
+		return NULL;
+	}
+	if (ini >= fin)
+	{
+		printf("ERROR in sub(Vector, int, int): ini index must be lower than fin index \n");
+		return NULL;
+	}
 	int len = fin-ini;
 	long double *v_pt = new long double[len];
 	for (int i = 0; i < len; i++, ini++) *(v_pt+i) = *(v->V+ini);
 	return new_vector(v_pt,len);
+}
+
+/* gets a subsection of a matrix
+** starting at indices _x to _y-1 */
+Matrix* sub(Matrix *A, int i_x, int f_x, int i_y, int f_y)
+{
+	if(i_x == 0 && i_y == 0 && f_x == A->rows && f_y == A->cols) return A;
+	if ( i_x < 0 || f_x > A->rows || i_y < 0 || f_y > A->cols )
+	{
+		printf("ERROR in sub(Matrix, int, int, int, int): indices must be inside of matrix bounds\n");
+		return NULL;
+	}
+	if (i_x >= f_x || i_y >= f_y)
+	{
+		printf("ERROR in sub(Matrix, int, int, int, int): init indices must be lower than end indices \n");
+		return NULL;
+	}
+	Matrix *B = new_matrix((f_x - i_x),(f_y - i_y));
+	int ib = 0;
+	for (int i = i_x; i < f_x; i++,ib++)
+	{
+		int jb = 0;
+		for (int j = i_y; j < f_y; j++,jb++)
+			*(*(B->M+ib)+jb) = *(*(A->M+i)+j);
+	}
+	return B;
 }
 
 Matrix* append_c(Matrix *A, Vector *b)
@@ -780,13 +840,55 @@ Matrix* inverse(Matrix *A)
 			*(*(Ix->M+i)+l) = (*(*(Ix->M+i)+l) - sum)/(*(*(X->M+i)+i));
 		}
 	}
+	free(X);
 	return Ix;
+
+}
+
+
+
+/* replicates the matrix x times in x axis, and y times in y axis
+** NOTE: it shouldn't enter a 0 in any of the inputs */
+Matrix* tile(Matrix *A, int x, int y)
+{
+	int c = A->cols;
+	int r = A->rows;
+	Matrix *B = new_matrix(A->rows*x, A->cols*y);
+	for (int i = 0; i < x; i++)
+	{
+		for (int j = 0; j < y; j++)
+		{
+			// loop for matrix A
+			int stp_x = i*r;
+			int stp_y = j*c;
+			for (int ir = 0; ir < r; ir++)
+			{
+				for (int ic = 0; ic < c; ic++)
+				{
+					*(*(B->M+ (ir+stp_x))+ (ic+stp_y)) = *(*(A->M+ ir)+ ic);
+				}
+			}
+		}
+	}
+	return B;
+}
+/* replicates the matrix t times
+** NOTE: it shouldn't enter a 0 in any of the inputs */
+Vector* repeat(Vector *u, int t)
+{
+	Vector *v = new_vector(u->size*t);
+	for (int i = 0; i < t; i++)
+		for (int j = 0; j < u->size; j++)
+			*(v->V +j+(u->size*i)) = *(u->V+j);
+	return v;
 }
 
 /*#######################  FILE READING  #########################*/
 
 /*
 reads a csv file and return data matrix M
+note: all numbers must be in float format
+for example, instead of 1 it must be writen as 1.0
 */
 Matrix* read_csv(char *filename, char separator, int rows, int fields)
 {
@@ -823,7 +925,10 @@ Matrix* read_csv(char *filename, char separator, int rows, int fields)
 
 /*###################### ASCEND ALGORITHM ########################*/
 
-/* solve system of linear equations for finding the minimax signs the first time */
+/* solve system of linear equations for finding the minimax signs the first time 
+** note: not implemented, instead solve is used, it is not implemented yet because
+** it has bugs. (°-°)" 
+*/
 Vector* lassol(Matrix *XY_cap)
 {
 	Matrix *XY = copy(XY_cap);
@@ -916,7 +1021,6 @@ Matrix* get_terms(Vector *deg)
 {
 	int comb = 1;
 	int temp = 1;
-	for (int i = 0; i < deg->size; i++) *(deg->V+i) = *(deg->V+i)+1; 
 	for(int i = 0; i < deg->size; i++) comb *= *(deg->V+i);
 	Matrix *terms = new_matrix(comb, deg->size);
 	for (int ci = terms->cols-1; ci >=0 ; ci--)
@@ -1070,7 +1174,7 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
 		}
 	}
 
-	printf("%d\t|%d\n", bmi, IE+inner->cols);
+	//printf(" Swapping %d for %d\n", bmi+1, IE+inner->cols);
 	
 	*(*(inner->M+bmi)) = mu;
 	for (int i = 0; i < outter->cols; ++i)
@@ -1104,7 +1208,7 @@ void swap_vector(Matrix *&outter, Matrix *&inner, Matrix *&B, long double mu, in
    		Vector of coefficients for each term of the polynomial,
    		the first element is the minimax internal error.
    		[epsilon_theta, c1, c2, ..., cn] */
-Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
+Vector* ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 {
 	int IE, mu;
 	int m = terms->rows;
@@ -1114,83 +1218,299 @@ Vector *ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 
 	long double stab_fac = 1e-6;
 	long double quasi = 0.05;
-	char c_Q_F;
-	bool Q_F = false;
+	bool Q_F = true;
 
 	char* filename = (char*) malloc(100);
-	int rows = 0;
-	int fields = 0;
+	filename = (char*)"z3Vars.dat";
+	int rows = 300;
+	int fields = 4;
 	
-	// read parameters
-	printf("Training filename: \n");
-	scanf("%s",filename);
-	printf("\ndata shape(rows fields): ");
-	scanf("%d %d",&rows,&fields);
-	printf("\nstabilization factor: ");
-	scanf("%Lf", &stab_fac);
-	printf("\nquasi minimax?(y/n):");
-	scanf("%c",&c_Q_F);
-	Q_F = (c_Q_F == 'y');
-	if(Q_F)
-	{
-		printf("\nquasi minimax value: ");
-		scanf("%Lf",&quasi);
-	}
-	printf("\n");
-
-	// read data. *Note: all numbers must have decimal point,
-	// you can't write 1 in the file it must be writen at least as 1.0
+	// printf("Training filename: \n");
+	// scanf("%s",filename);
+	// printf("data shape(rows fields):");
+	// scanf("%d %d",&rows,&fields);
+	// read data
 	Matrix *outter = read_csv(filename,'\t', rows, fields);
+	// printf("Data:\n");
+	// print(outter);
+	// printf("\n");
 	// map data
 	outter = map(outter, terms);
 	// stabilize data
 	outter = stabilize(outter, stab_fac);
 	// split data
 	Matrix *inner = first(outter,M,true);
+	// printf("Inner set:\n");
+	// print(inner);
+	// printf("\nOutter set:\n");
+	// print(outter);
 	// get minimax signs
 	Vector *signs = get_signs(remove(inner,inner->cols-1,1));
 	// get matrix A
 	inner = insert(inner,0,signs,1); 
 	// get 1st inverse
 	Matrix *B = inverse(remove(inner,inner->cols-1,1));
-
+	// printf("Identity:\n");
+	// print(mul(B,remove(inner,inner->cols-1,1)));
 	int iteration = 1;
 	char cont_flag;
-	// printf("It\tEpsilon TH\tEpsilonPH\tSwap\tFor\n");
+
 	while(true)
 	{
+		//printf("check1\n");
 		c = get_coeff(B, get_col(inner,inner->cols-1), epsilon_th);
+		//printf("check2\n");
+		// printf("coefficients:\n");
+		// print(c);
 		epsilon_ph = test_coeff(outter, c, mu, IE);
-		printf("%d\t|%4.10Lf\t|%4.10Lf\t|",iteration, epsilon_th, epsilon_ph);
+		//printf("\n IT[%d]: eps_th = %4.10Lf eps_ph = %4.10Lf ",iteration, epsilon_th, epsilon_ph);
 		if ((epsilon_th >= epsilon_ph) || (Q_F && fabsl(epsilon_th - epsilon_ph) <= quasi))
 		{
-			if (Q_F) printf("\nquasi minimax achieved\n");
+			//if (Q_F)
+			//{
+				//printf("quasi minimax achieved\n");
+			//}
 			break;
 		}
-		else swap_vector(outter, inner, B, mu, IE);
+		else
+		{
+			swap_vector(outter, inner, B, mu, IE);
+			// printf(" \n");
+			// print(mul(remove(inner,inner->cols-1,1), B));
+		}
+		// printf("Next? (y/n): ");
+		// scanf("%c",&cont_flag);
+		// if(cont_flag=='n') break;
 		iteration++;
 	}
 	eps_ph = epsilon_ph;
 	eps_th = epsilon_th;
+	free(B);
+	free(outter);
+	free(inner);
 	return c;
 }
 
+/*###################### GENETIC ALGORITHM(EGA) ########################*/
+
+/* gen population N= number of individuals, L= Length of each individual,
+** nt= number of terms, nv= number of variables, bid= bits in digit,
+** max_deg= maximum degree */
+Matrix *gen_population(int N, int L, int nt, int nv, int bid, int max_deg)
+{
+	Matrix *pop = new_matrix(N,L);
+
+	for (int ii = 0; ii < N; ii++)
+	{
+		// naive generation of individuals(fully random)
+		for (int bi = 0; bi < L; bi++)
+			*(*(pop->M+ii)+bi) = round(rand01());
+		// making a single individual
+		//1 chose degree form a normal distribution
+		//2 find the combination of the powers wich adds to chosen degree
+		//3 shufle powers
+		//4 if ok insert ocurrences separated by ','
+		//5 concatenate valid combinations without ','
+	}
+	return pop;
+}
+
+/* decodes the individual into a matrix of degrees of variables 
+** input:
+**       individual: pointer to array of 1s and 0s 
+**       bid: bytes in digit
+**       nt: number of terms in polynomial
+**       nv: number of variables */
+Matrix* decode(long double *ind, int nt, int nv, int bid)
+{
+	Matrix *terms = new_matrix(nt,nv);
+	int step_t = nv*bid;
+	for (int t = 0; t < nt; t++) // for each term
+	{
+		for (int v = 0; v < nv; v++) // for each variable
+		{
+			// binary to decimal
+			int power = 1;
+			int decimal = 0;
+			for (int b = (t*step_t)+(bid*(v+1))-1; b >= (t*step_t)+(bid*v); b--) // for each bit in digit
+			{
+				decimal += *(ind+b)*power;
+				power<<=1;
+			}
+			*(*(terms->M+t)+v) = decimal;	
+		}
+	}
+	return terms;
+}
+
+/* returns a vector of fitness values starting at individual ini-th
+** to the (fin-1)-th individual */
+void evaluate(Matrix *pop, Vector *&fit, int ini, int fin, int nt, int nv, int bid)
+{
+	long double eps_th,eps_ph;
+	for (int ii = ini; ii < fin; ii++)
+	{
+		Matrix *terms = decode(*(pop->M+ii),nt,nv,bid);
+		Vector *c = ascend(terms,eps_th,eps_ph);
+
+		*(fit->V+ii) = eps_ph; // minimizing by minimax error
+		// test_RMS(test_filename,coefficients) - minimizing by rms error
+	}
+}
+
+/* annular crossover */
+void annular_cross(Matrix *&pop, int N, int L, double Pc)
+{
+	int n = N-1;
+	int L_2 = (int)(L/2);
+	int N_2 = (int)(N/2);
+	for (int i = 0; i < N_2; i++,n--)
+	{
+		double p = rand01();
+		if (p <= Pc)
+		{
+			int xp = randint(0,L_2);
+			// swap the middle chunk starting at xp and finishing at L_2
+			for (int j = xp; j <= L_2; j++)
+			{
+				// crossing ind i-th with ind n-th
+				long double temp = *(*(pop->M+i)+j);
+				*(*(pop->M+i)+j) = *(*(pop->M+n)+j);
+				*(*(pop->M+n)+j) = temp;
+			}
+
+		}
+
+	}
+}
+
+/* uniform mutation */
+void mutate(Matrix *&pop, int N, int L, int b2m)
+{
+	while(b2m--)
+	{
+		int p1 = round(rand01()*L)-1;
+		int p2 = round(rand01()*N)-1;
+		if(*(*(pop->M+p2)+p1) == 0) *(*(pop->M+p2)+p1) = 1;
+		else *(*(pop->M+p2)+p1) = 0;
+	}
+}
+
+void sort(Matrix *&pop, Vector *&fit)
+{
+	int n = fit->size;
+	for (int i = 0; i < n; i++)
+	{
+		for (int j = 0; j < n; j++)
+		{
+			if (*(fit->V+j) > *(fit->V+i))
+			{
+				// swap fitness values
+				double tmp = *(fit->V+i);
+				*(fit->V+i) = *(fit->V+j);
+				*(fit->V+j) = tmp;
+				// swap individuals
+				long double *ind = *(pop->M+i);
+				*(pop->M+i) = *(pop->M+j);
+				*(pop->M+j) = ind;
+			}  
+		}
+	}
+}
+
+void print_scores(Vector *fit, int n)
+{
+	printf("Best %d scores:\n",n);
+	for (int i = 0; i < n; i++)
+	{
+		printf( "%d: %Lf\t",i,*(fit->V+i));
+	}
+}
+
+void run_ega(/*Vector *&best_ind, long double &best_fit*/)
+{
+	// parameters of the EGA
+
+	// file definition parameters
+	char* f_train = (char*)"DB24-glass/TRAIN.TXT";
+	char* f_test = (char*)"DB24-glass/TEST.TXT";
+	
+	double Pc = 1; // crossover probability
+	double Pm = .05; // mutation probability
+	int gen = 100; // number of generations
+	int N = 50; // number of individuals
+	int max_deg = 8; // maximum degree of the variables
+
+	// parameters inferred from the dataset
+	int NV = 3; // number of independent variables
+	int NT = 8; // number of terms
+
+	// derivated parameters
+	int BID = ceil(log2(max_deg));
+	int L = NT*NV*BID;
+	int b2m = round(L*N*Pm); // parameter for later calculations
+
+	// generate random population
+	Matrix *pop = gen_population(N,L, NT, NV, BID, max_deg);
+	// evaluate population
+	Vector *fitness = new_vector(N); 
+	evaluate(pop,fitness, 0, N, NT, NV, BID);
+
+	for (int g = 0; g < gen; g++)
+	{
+		// duplicate population and fitness
+		//pop = tile(sub(pop,0,N,0,L),2,1);
+		//fitness = repeat(sub(fitness,0,N),2);
+		print_shape(pop,(char*)"population");
+		printf("Size of fitness: %d\n",fitness->size );
+		// cross
+		//annular_cross(pop, N, L, Pc);
+		// mutation
+		//mutate(pop, N, L, Pm);
+		// evaluate new population
+		evaluate(pop,fitness, 0, N, NT, NV, BID);
+		// sort population and fitness
+		//sort(pop, fitness);
+		// print results
+		system("clear");
+		printf("Generation %d:\n",g);
+		print_scores(fitness, 20);
+
+	}
+	printf("Best individual: \n");
+	Matrix *terms = decode(*(pop->M),NT,NV,BID);
+	long double eps_th,eps_ph;
+	Vector *c = ascend(terms,eps_th,eps_ph);
+	printf("Minimax error: %Lf\n", *(fitness->V));
+	printf("coefficients:\n");
+	print(c);
+
+}
+
+/*###################### Main entrance of the program ########################*/
+
 int main(int argc, char const *argv[])
 {
-	long double epsilon_th;
-	long double epsilon_ph;
-	Vector *deg = new_vector(3);
-	deg->V[0] = 2;
-	deg->V[1] = 2;
-	deg->V[2] = 2;
+	// long double epsilon_th;
+	// long double epsilon_ph;
+	// Vector *deg = new_vector(3);
+	// deg->V[0] = 3;
+	// deg->V[1] = 3;
+	// deg->V[2] = 3;
 	
-	Matrix *terms = get_terms(deg);
+	// Matrix *terms = get_terms(deg);
 	// print_shape(terms,(char*)"terms");
 	// print(terms);
-	Vector *c = ascend(terms, epsilon_th, epsilon_ph);
-	printf("\nEpsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
-	printf("\ncoefficients found\n");
-	print(c);
+	// Vector *c = ascend(terms, epsilon_th, epsilon_ph);
+	// printf("\nEpsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
+	// printf("\ncoefficients found\n");
+	// print(c);
+
+	run_ega();
+	
+	// printf("Sub Matrix A_cap(1,3,2,5):\n");
+	// print(sub(A,0,5,0,5));
+
 
 	return 0;
 }
