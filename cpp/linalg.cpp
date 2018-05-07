@@ -5,6 +5,10 @@
 #include <string.h>
 #include <time.h>
 
+/*########################### GLOBAL VARIABLES ############################*/
+
+srand(time(NULL));
+
 /*########################### OTHER OPERATORS ############################*/
 
 /* char array must end with '\0' special character */
@@ -107,12 +111,34 @@ Matrix* new_matrix(int rows, int cols)
 	return matrix;
 }
 
-Matrix* new_I_matrix(int size)
+int** new_Ix(int size)//Ix is squared
 {
-	Matrix *M = new_matrix(size,size);
-	for (int i = 0; i < size; ++i) M->M[i][i] = 1;
-	return M;
+	int **A = (int**) malloc(sizeof(int*)*size);
+	for (int i = 0; i < rows; ++i) *(A+i) =  (int*) calloc(size,sizeof(int));
+	for (int i = 0; i < size; ++i) *(*(A+i)+i) = 1;
+	return A;
 }
+
+long double** new_array_f(int rows, int cols)
+{
+	long double **A = (long double**) malloc(sizeof(long double*)*rows);
+	for (int i = 0; i < rows; ++i) *(A+i) =  (long double*) calloc(sizeof(long double)*cols);
+	return A;
+}
+
+int** new_array_d(int rows, int cols)
+{
+	int **A = (int**) malloc(sizeof(int*)*rows);
+	for (int i = 0; i < rows; ++i) *(A+i) =  (int*) calloc(sizeof(int)*cols);
+	return A;
+}
+
+long double* new_array_f(int size)
+{
+	long double *u = (long double*) calloc(sizeof(long double*)*size);
+	return u;
+}
+
 
 // void destroy(Vector *u)
 // {
@@ -143,12 +169,16 @@ Matrix* copy(Matrix *A)
 	return M;
 }
 
-Matrix* transpose(Matrix *M)
+long double** transpose(long double **M,int mr,int mc)
 {
-	Matrix *T = new_matrix(M->cols,M->rows);
-	for (int i = 0; i < T->rows; ++i)
-		for (int j = 0; j < T->cols; ++j) T->M[i][j] = M->M[j][i];
-	return T;
+	for (int i = 0; i < mr; ++i)
+		for (int j = 0; j < mc; ++j) 
+		{
+			long double temp = *(*(M+i)+j);
+			*(*(M+i)+j) = *(*(M+j)+i);
+			*(*(M+j)+i) = temp;
+		}
+	return M;
 }
 /* gets a subsection of the vector */
 Vector* sub(Vector *v, int ini, int fin)
@@ -474,14 +504,17 @@ long double mul(Vector *u)
 }
 
 /* dot product of two Vectors u,v*/
-long double dot(Vector *u, Vector *v)
+long double dot(long double *u, int ul, long double *v, int vl)
 {
-	if(u->size != v->size)
+	if(ul != vl)
 	{
-		printf("Error in dot(u,v): Vector sizes must be the same\n");
+		printf("Error E05 in dot(u,v): Vector sizes must be the same\n");
 		return -.10101;
 	}
-	return sum(mul(u,v));
+	long double sum = 0;
+	for (int i = 0; i < ul; i++)
+		sum += (*(u+i)) * (*(v+i));
+	return sum;
 }
 
 /* product of matrices C(n,p) = A(n,m)*B(m,p) */
@@ -500,17 +533,17 @@ Matrix* mul(Matrix *A, Matrix *B)
 }
 
 /* product of matrix M and a Vector u*/
-Vector* mul(Matrix *A, Vector *u)
+long double* mul(long double **A, int Ar, int Ac, long double *u, int ul)
 {
-	if (A->cols != u->size)
+	if (Ac != ul)
 	{ 
-		printf("Error in mul(A,v): Matrix A cols must be same size as u rows\n"); 
+		printf("Error E04 in mul(A,v): Matrix A cols must be same size as u rows\n"); 
 		return NULL; 
 	}
-	long double* v_pt = new long double[A->rows];
-	for (int i = 0; i < A->rows; ++i)
-		v_pt[i] = dot(new_vector(*(A->M+i),A->cols),u);
-	return new_vector(v_pt,A->rows);
+	long double* v_pt = new_array_f(Ar);
+	for (int i = 0; i < Ar; ++i)
+		*(v_pt+i) = dot(*(A+i),Ac,u,ul);
+	return v_pt;
 }
 Vector* mul(Vector *u, Matrix *A)
 {
@@ -595,28 +628,19 @@ Matrix* sample(Matrix *&A, int samp_size, bool inplace)
 	return S;
 }
 
-/* get first n rows of a matrix as another matrix */
-Matrix* first(Matrix *&A, int samp_size, bool inplace)
+/* get first n rows of a matrix substracting it from the original
+** The array A is the original one and S is the sample array where the first elements
+** are going to be substracted */
+void first(long double **&A,int &ar,int ac, long double **&S, int n)
 {
-	Matrix *S = new_matrix(samp_size, A->cols);
-	for (int i = 0; i < samp_size; i++)
-	{
-		for (int j = 0; j < A->cols; j++)
-		{
-			*(*(S->M+i)+j) = *(*(A->M+i)+j);
-		}
-	}
-	if (!inplace) return S;
-	Matrix *residual = new_matrix(A->rows - samp_size, A->cols);
-	for (int i = 0; i < residual->rows; i++)
-	{
-		for (int j = 0; j < A->cols; j++)
-		{
-			*(*(residual->M+i)+j) = *(*(A->M+samp_size+i)+j);
-		}
-	}
+	for (int i = 0; i < n; i++)
+			*(*(S+ i)+ j) = *(*(A+ i)+ j);
+	ar -= n;
+	long double **residual = new_array_f(ar, ac);
+	for (int i = 0; i < ar; i++)
+		for (int j = 0; j < ac; j++)
+			*(*(residual+i)+j) = *(*(A+n+i)+j);
 	A = residual;
-	return S;
 }
 
 long double min(Vector* u, int &index)
@@ -648,145 +672,64 @@ long double max(Vector* u, int &index)
 }
 
 /* prints a Vector */
-void print(Vector *u)
+void print(long double *u, int len)
 {
 	printf("[ ");
-	for (int i = 0; i < u->size; ++i) printf("%10.12Lf ", *(u->V+i));
+	for (int i = 0; i < len; ++i) printf("%10.12Lf ", *(u+i));
 	printf("]\n");
 }
 
 /* prints a matrix */
-void print(Matrix *A)
+void print(long double **A, int ar, int ac)
 {
-	for (int i = 0; i < A->rows; ++i) print(new_vector(*(A->M+i),A->cols));
+	for (int i = 0; i < ar; i++) print(*(A+i),ac);
 }
 
-Matrix* getCofactor(Matrix *M, int p, int q)
+/* returns Vector c of coefficients */
+void solve(long double **XY,int xyr,int xyc, long double *&c)
 {
-	int i = 0, j = 0;
-	Matrix *temp = new_matrix(M->rows-1,M->cols-1);
- 
-	// Looping for each element of the matrix
-	for (int row = 0; row < M->rows; row++) 
-	{
-		for (int col = 0; col < M->cols; col++) 
-		{
-			if (row != p && col != q) 
-			{
-				*(*(temp->M+i)+(j++)) = *(*(M->M+row)+col);
-				if (j == M->cols-1)
-				{
-					j = 0;
-					i++;
-				}
-			}
-		}
-	}
-	return temp;
-}
-
-long double det(Matrix *A)
-{
-	if (A->rows == 1) return *(*(A->M));
-	long double D = 0;
-	int sign = 1; 
- 
-	for (int f = 0; f < A->cols; f++) {
-		D += sign * (*(*(A->M)+f)) * det(getCofactor(A, 0, f));
-		sign = -sign;
-	}
-	return D;
-}
-
-/* returns Vector x of coefficients */
-Vector* solve(Matrix *XY)
-{
-	// if (A->rows != A->cols)
-	// {
-	// 	printf("Error in solve(A,b): Matrix A must be squared.\n");
-	// 	return NULL;
-	// }
-	// if (A->rows != b->size)
-	// {
-	// 	printf("Error in solve(A,b): Vector b must be same size as Matrix A order.\n");
-	// 	return NULL;
-	// }
-	// if(det(A) == 0)
-	// {
-	// 	printf("Error in solve(A,b): Matrix A is singular and can't be solved.\n");
-	// 	return NULL;
-	// }
-
-	int m = XY->rows;
-	//Matrix *A_temp = append(A,b,1);
-	Matrix *A_temp = copy(XY);
-	Vector *x = new_vector(m);
+	int m = xyr;
 
 	/* loop for the generation of upper triangular matrix*/
 	for(int j=0; j<m; j++) 
 	{
 		for(int i=j+1; i<m; i++)
 		{
-			long double c= *(*(A_temp->M+i)+j)/(*(*(A_temp->M+j)+j));
+			long double c= *(*(XY+i)+j)/(*(*(XY+j)+j));
 			for(int k=0; k<m+1; k++)
-				*(*(A_temp->M+i)+k) = *(*(A_temp->M+i)+k)-c*(*(*(A_temp->M+j)+k));
+				*(*(XY+i)+k) = *(*(XY+i)+k)-c*(*(*(XY+j)+k));
 		}
 	}
 	
-	*(x->V+m-1) = *(*(A_temp->M+m-1)+m)/(*(*(A_temp->M+m-1)+m-1));
+	*(x->V+m-1) = *(*(XY+m-1)+m)/(*(*(XY+m-1)+m-1));
 
 	/* this loop is for backward substitution*/
 	for(int i=m-2; i>=0; i--)
 	{
 		long double sum=0;
-		for(int j=i+1; j<m; j++) sum += *(*(A_temp->M+i)+j) * (*(x->V+j));
-		*(x->V+i) = (*(*(A_temp->M+i)+m)-sum)/(*(*(A_temp->M+i)+i));
+		for(int j=i+1; j<m; j++) sum += *(*(XY+i)+j) * (*(x->V+j));
+		*(x+i) = (*(*(XY+i)+m)-sum)/(*(*(XY+i)+i));
 	}
-
-	return x;
 }
 
-/* adjoint of a matrix */
-Matrix* adjoint(Matrix *A)
+long double** inverse(long double **A, int A_r, int A_c)
 {
-	if (A->cols == 1)
-	{
-		Matrix *adj = new_matrix(1,1);
-		*(*adj->M) = 1;
-		return adj;
-	}
-	Matrix *adj = new_matrix(A->cols,A->cols);
-	int sign = 1;
-	for (int i = 0; i < A->cols; i++)
-	{
-		for (int j = 0; j < A->cols; j++)
-		{
-			sign = ((i+j)%2==0)? 1: -1;
-			*(*(adj->M+j)+i) = sign*det(getCofactor(A,i,j));
-		}
-	}
-	return adj;
-}
-
-Matrix* inverse(Matrix *A)
-{
-	int dim = A->cols;
-	Matrix *Ix = new_I_matrix(dim);
-	Matrix *X = copy(A);
+	int dim = A_c;
+	long double **Ix = (long double**)new_Ix(dim);
 
 	// scale matrices
 	for (int i = 0; i < dim; i++)
 	{
-		long double r_max = fabsl(*(*(X->M+i)));
+		long double r_max = fabsl(*(*(A+i)));
 		for (int j = 1; j < dim; j++)
-			r_max = fmaxl(fabsl(*(*(X->M+i)+j)), r_max);
+			r_max = fmaxl(fabsl(*(*(A+i)+j)), r_max);
 		if (r_max == 0)
-			printf("Error in inverse(A): can't get inverse, unstable matrix.\n");
+			printf("Error E03 in inverse(A): can't get inverse, unstable matrix.\n");
 		long double scale = 1/r_max;
 		for (int j = 0; j < dim; j++)
 		{
-			*(*(X->M+i)+j) *= scale;
-			if (i==j) *(*(Ix->M+i)+j) = scale;
+			*(*(A+i)+j) *= scale;
+			if (i==j) *(*(Ix+i)+j) = scale;
 		}
 	}
 
@@ -798,7 +741,7 @@ Matrix* inverse(Matrix *A)
 		long double big = 0;
 		for (int i = k; i < dim; i++)
 		{
-			temp = fabsl(*(*(X->M+ i)+ k));
+			temp = fabsl(*(*(A+ i)+ k));
 			if (big < temp)
 			{
 				big = temp;
@@ -806,7 +749,7 @@ Matrix* inverse(Matrix *A)
 			}
 		}
 		if (big == 0)
-			printf("Error in inverse(A): can't get inverse, unstable matrix.\n");
+			printf("Error E03 in inverse(A): can't get inverse, unstable matrix.\n");
 		if (ipiv != k)
 		{
 			swap(X,ipiv,k,0);
@@ -817,30 +760,29 @@ Matrix* inverse(Matrix *A)
 		long double quot;
 		for (int i = k+1; i < dim; i++)
 		{
-			quot = *(*(X->M+ i)+ k) / (*(*(X->M+ k)+ k));
+			quot = *(*(A+ i)+ k) / (*(*(A+ k)+ k));
 
 			for (int j = k+1; j < dim; j++)
-				*(*(X->M+ i)+ j) -= (*(*(X->M+ k)+ j)) * quot;
+				*(*(A+ i)+ j) -= (*(*(A+ k)+ j)) * quot;
 
 			for (int j = 0; j < dim; j++)
-				*(*(Ix->M+ i)+ j) -= (*(*(Ix->M+ k)+ j)) * quot;
+				*(*(Ix+ i)+ j) -= (*(*(Ix+ k)+ j)) * quot;
 		}
 	}
-	if (*(*(X->M+dim-1)+dim-1) == 0)
-			printf("Error in inverse(A): can't get inverse, unstable matrix.\n");
+	if (*(*(A+dim-1)+dim-1) == 0)
+			printf("Error E03 in inverse(A): can't get inverse, unstable matrix.\n");
 	// back substitution
 	for (int l = 0; l < dim; l++)
 	{
-		*(*(Ix->M+dim-1)+l) /= (*(*(X->M+dim-1)+dim-1));
+		*(*(Ix+dim-1)+l) /= (*(*(A+dim-1)+dim-1));
 		for (int i = dim-2; i >= 0; i--)
 		{
 			long double sum = 0;
 			for (int j = i+1; j < dim; j++)
-				sum += *(*(X->M+i)+j) * (*(*(Ix->M+j)+l));
-			*(*(Ix->M+i)+l) = (*(*(Ix->M+i)+l) - sum)/(*(*(X->M+i)+i));
+				sum += *(*(A+i)+j) * (*(*(Ix+j)+l));
+			*(*(Ix+i)+l) = (*(*(Ix+i)+l) - sum)/(*(*(A+i)+i));
 		}
 	}
-	free(X);
 	return Ix;
 
 }
@@ -883,21 +825,21 @@ Vector* repeat(Vector *u, int t)
 	return v;
 }
 
-/*#######################  FILE READING  #########################*/
+/*#######################  FILE I/O  #########################*/
 
 /*
 reads a csv file and return data matrix M
 note: all numbers must be in float format
 for example, instead of 1 it must be writen as 1.0
 */
-Matrix* read_csv(char *filename, char separator, int rows, int fields)
+long double** read_csv(char *filename, char separator, int rows, int fields)
 {
 	FILE* stream = fopen(filename, "r");
 	if(stream == NULL)
 	{
-		printf("Error in read_csv(filename,sep,rows,fields): file does not exists.\n");
+		printf("Error E00 in read_csv(filename,sep,rows,fields): file does not exists.\n");
 	}
-	Matrix *data = new_matrix(rows, fields);
+	long double **data = new_array_f(rows, fields);
 	int c = fgetc(stream);
 	int row = 0;
 	int col = 0;
@@ -913,9 +855,10 @@ Matrix* read_csv(char *filename, char separator, int rows, int fields)
 				c = fgetc(stream);
 			}
 			*(num+i_2) = '\0';
-			*((*(data->M+i))+j) = str2double(num);
+			*(*(data+i)+j) = str2double(num);
 			if (c == EOF) break;
 			c = fgetc(stream);
+			free(num);
 		}
 		if (c == EOF) break;
 	}
@@ -1001,19 +944,23 @@ Vector* lassol(Matrix *XY_cap)
 	return lambda;
 }
 
-/* get minimax signs by te 4th method of the minimax theory document */
-Vector* get_signs(Matrix *inner)
+/* get minimax signs by te 4th method of the minimax theory document 
+** and appends the signs found to the inner set and asigns it to inner_*/
+void get_signs(long double **&inner,int ir,int ic, long double **&inner_)
 {
-	inner = transpose(inner);
-	// Matrix *B = remove(inner,inner->cols-1,1);
-	// Vector *f = get_col(inner,inner->cols-1);
-	Vector *signs = solve(inner);
-	//Vector *signs = lassol(inner);
-	signs = append(signs,-1);
-	signs = sign(signs);
+	long double **innT = transpose(inner);
+	long double *signs = new_array_f(ir);
+	*(signs+ir-1) = -1;
+	signs = solve(innT,ic,ir);
+	free(innT);
+	
+	// append signs to inner_ first column
+	for (int i = 0; i < ir; i++) *(*(inner_+i)) = sign(*(signs+i));
+	for (int i = 0; i < ir; i++)
+		for (int j = 0; j < ic j++)
+			*(*(inner_+i)+j+1) = *(*(inner+i)+j);
 	// printf("Minimax signs:\n");
 	// print(signs);
-	return signs;
 }
 
 /* calculates all the combinations of the degrees of the variables */
@@ -1021,6 +968,7 @@ Matrix* get_terms(Vector *deg)
 {
 	int comb = 1;
 	int temp = 1;
+	for(int i = 0; i < deg->size; i++) *(deg->V+i) = *(deg->V+i) + 1;
 	for(int i = 0; i < deg->size; i++) comb *= *(deg->V+i);
 	Matrix *terms = new_matrix(comb, deg->size);
 	for (int ci = terms->cols-1; ci >=0 ; ci--)
@@ -1043,42 +991,61 @@ Matrix* get_terms(Vector *deg)
 	return terms;
 }
 
-/* maps the data into new dataset with the degrees of the variables given */
-Matrix* map(Matrix *data, Matrix *terms)
+/* maps the data into new dataset with the degrees of the variables given 
+** input:
+**    data: array of data of dimensions (dr,dc)
+**    dr: data rows
+**    dc: data columns
+**    terms: matrix with the following format.
+** 		if there are originally 5 variables
+** 		each array is a term which 
+** 		has the exponent for each variable.
+** 		example:
+**
+** 		       v1, v2, v3, v4, v5=vc
+** 		t1	[ [ 0,  1,  2,  1,  3],
+** 		t2	  [ 1,  2,  3,  1,  0],
+** 		...	  ...
+** 		tr	  [ 1,  2,  3,  4,  1] ]
+** 	  tr: terms rows
+** 	  tc: terms columns   
+*/
+void map(long double **&data,int dr,int dc, int **terms, int tr, int tc)
 {
-	if (data->cols-1 != terms->cols)
+	// checkMM for memmory liberation
+	if (dc-1 != tc)
 	{
-		printf("Error in map(data,terms): data fields and terms columns must have the same size.\n");
+		printf("Error E01 in map(data,terms): data fields and terms columns must have the same size.\n");
 		return NULL;
 	}
 	
-	Matrix *m_data = new_matrix(data->rows,terms->rows+1); // +1 for the dependent variable
+	long double **m_data = new_array_f(dr,tr+1); // +1 for the dependent variable
 
-	for (int i = 0; i < m_data->rows; i++)
+	for (int i = 0; i < m_dr; i++)
 	{
-		for (int j = 0; j < m_data->cols-1; j++)
+		for (int j = 0; j < m_dc-1; j++)
 		{
 			long double value = 1;
-			for (int k = 0; k < terms->cols; k++)
-			{
-				//value = data[i][k]^terms[j][k]
-				value *= powl((*(*(data->M+i)+k)),(*(*(terms->M+j)+k)));
-			}
-			*(*(m_data->M+i)+j) = value;
+			for (int k = 0; k < tc; k++)
+				value *= powl((*(*(data+i)+k)),(*(*(terms+j)+k)));
+
+			*(*(m_data+i)+j) = value;
 		}
-		*(*(m_data->M+i) + m_data->cols-1) = *(*(data->M+i) + data->cols-1);
+		*(*(m_data+i) + m_dc-1) = *(*(data+i) + dc-1);
 	}
-	return m_data;
+	data = m_data;
 }
 
-Vector* get_coeff(Matrix *B, Vector *f, long double &eps_th)
+void get_coeff(long double  **B,int Br,int Bc, long double *f, int fl, long double *c, int cl long double &eps_th)
 {
-	Vector *C = mul(B,f);
-	eps_th = *C->V;
+	long double *C = mul(B,Br,Bc, f,fl);
+	eps_th = *C;
+	for (int i = 0; i < cl; ++i)
+		*(c+i) = *(C+i+1);
+	free(C);
 	// printf("coefficients:\n");
 	// print(C);
 	// printf("\n");
-	return remove(C,0);
 }
 
 /* test coefficients in the outter set.
@@ -1128,23 +1095,20 @@ void get_new_inverse(Matrix *&B, int betha, Vector *lambdas)
 			if (i!=betha) *(*(B->M+j)+i) = *(*(B->M+j)+i) - (*(lambdas->V+i)) * (*(*(B->M+j)+betha));
 }
 
-/* stabilizes data by adding neglectable random value */
-Matrix* stabilize(Matrix *A, long double factor)
+/* stabilizes data by adding neglectable(<=10e-6) random value */
+void stabilize(long double **&A, int ar, int ac, long double factor)
 {
-	Matrix *S = new_matrix(A->rows,A->cols);
-	srand(time(NULL));
 	double random;
-	for (int i = 0; i < S->rows; ++i)
+	for (int i = 0; i < ar; i++)
 	{
-		for (int j = 0; j < S->cols; ++j)
+		for (int j = 0; j < ac; j++)
 		{
-			random = (double)rand() / (double)RAND_MAX ;
-			if(*(*(A->M+i)+j) == 0) 
-				*(*(S->M+i)+j) = *(*(A->M+i)+j) + random*factor;
-			else *(*(S->M+i)+j) = (*(*(A->M+i)+j)) * (1+random*factor);
+			random = rand01();
+			if(*(*(A+i)+j) == 0) 
+				*(*(A+i)+j) = *(*(A+i)+j) + random*factor;
+			else *(*(A+i)+j) = (*(*(A+i)+j)) * (1+random*factor);
 		}
 	}
-	return S;
 }
 
 /* swaps a vector from the inner set for the one in the outter set
@@ -1222,34 +1186,50 @@ Vector* ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 
 	char* filename = (char*) malloc(100);
 	filename = (char*)"z3Vars.dat";
-	int rows = 300;
+	// dimensions of the original dataset
+	int rows = 300; 
 	int fields = 4;
+	// dimensions of the mapped dataset
+	int dr,dc;
 	
+	long double *c = new_array_f(m);
+
+
 	// printf("Training filename: \n");
 	// scanf("%s",filename);
 	// printf("data shape(rows fields):");
 	// scanf("%d %d",&rows,&fields);
 	// read data
-	Matrix *outter = read_csv(filename,'\t', rows, fields);
-	// printf("Data:\n");
-	// print(outter);
-	// printf("\n");
+	long double **outter = read_csv(filename,'\t', rows, fields);
+	free(filename);
+	
 	// map data
-	outter = map(outter, terms);
+	map(outter,rows,fields, terms,tr,tc);
+	dr = rows; // rows of the mapped dataset
+	dc = tr+1;
+
 	// stabilize data
-	outter = stabilize(outter, stab_fac);
+	stabilize(outter,dr,dc, stab_fac);
+	
 	// split data
-	Matrix *inner = first(outter,M,true);
+	long double **inner = new_array_f(M,dc);
+	first(outter,dr,dc, inner_,M);
+	
 	// printf("Inner set:\n");
 	// print(inner);
 	// printf("\nOutter set:\n");
 	// print(outter);
+	
 	// get minimax signs
-	Vector *signs = get_signs(remove(inner,inner->cols-1,1));
+	int Ar = M;
+	int Ac = dc+1;
+	long double **A = new_array_f(Ar,Ac);
+	get_signs(inner,M,dc, A);
+	free(inner);
+
 	// get matrix A
-	inner = insert(inner,0,signs,1); 
 	// get 1st inverse
-	Matrix *B = inverse(remove(inner,inner->cols-1,1));
+	long double **B = inverse(A,A_r,A_c-1);
 	// printf("Identity:\n");
 	// print(mul(B,remove(inner,inner->cols-1,1)));
 	int iteration = 1;
@@ -1258,7 +1238,7 @@ Vector* ascend(Matrix *terms, long double &eps_th, long double &eps_ph)
 	while(true)
 	{
 		//printf("check1\n");
-		c = get_coeff(B, get_col(inner,inner->cols-1), epsilon_th);
+		get_coeff(B,Ar,Ac, get_col(inner,inner->cols-1), epsilon_th);
 		//printf("check2\n");
 		// printf("coefficients:\n");
 		// print(c);
@@ -1504,7 +1484,7 @@ int main(int argc, char const *argv[])
 	// Vector *c = ascend(terms, epsilon_th, epsilon_ph);
 	// printf("\nEpsilon Theta: %Lf\nEpsilon Phi: %Lf\n", epsilon_th, epsilon_ph);
 	// printf("\ncoefficients found\n");
-	// print(c);
+	 print(c);
 
 	run_ega();
 	

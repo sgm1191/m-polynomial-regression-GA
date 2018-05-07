@@ -9,40 +9,38 @@
 /*#########################################################################*/
 
 // constants
-const int log_expantion[] = { 1, 3, 5, 7, 9,
-							 11,15,21,25,27,
-							 33,35,45,49,55,
-							 63,77,81,99,121};
+const int powers[] = { 1, 3, 5, 7, 9,
+					  11,15,21,25,27,
+					  33,35,45,49,55,
+					  63,77,81,99,121};
 double rseed = 12345;
-const int TST_MMX = 1;
-const int TST_RMS = 2;
-const int TRN_MMX = 3;
-const int TRN_RMS = 4;
+const int MMX = 1;
+const int RMS = 2;
 
 // file parameters
-char* train_file = (char*)"z3Vars.dat";
-int tr_rows = 300;
-int tr_cols = 4;
-char* test_file = (char*)"z3Vars.dat";
-int ts_rows = 300;
-int ts_cols = 4;
+char* train_file = (char*)"DB16-concrete/TRAIN.TXT";//"z3Vars_sc.dat";
+int tr_rows = 824;//300;
+int tr_cols = 9;//4;
+char* test_file = (char*)"DB16-concrete/TEST.TXT";//"z3Vars_sc.dat";
+int ts_rows = 206;//300;
+int ts_cols = 9;//4;
 
 // parameters of the ascend algorithm
 long double stab_fac = 1e-6;
 long double quasi = 0.05;
 bool Q_F = true;
-int minimize = TST_RMS;
+int minimize = MMX;
 
 // parameters of the EGA
 double Pc = 1; // crossover probability
 double Pm = .05; // mutation probability
-int gen = 50; // number of generations
-int N = 50; // number of individuals
-int max_deg = 7; // maximum degree of the variables
+int gen = 100; // number of generations
+int N = 100; // number of individuals
+int max_deg = 121; // maximum degree of the variables
 
 // parameters inferred from the dataset
-int NV = 3; // number of independent variables
-int NT = 10; // number of terms
+int NV = 8; // number of independent variables
+int NT = 6; // number of terms
 
 
 
@@ -100,6 +98,21 @@ int randint(int min, int max)
 	return (rand() % (max + 1 - min)) + min;
 }
 
+/* shuffles an array */
+void shuffle(long double *&array, int n)
+{
+    if (n > 1) 
+    {
+        int i;
+        for (i = 0; i < n - 1; i++) 
+        {
+          int j = i + rand() / (RAND_MAX / (n - i) + 1);
+          int t = *(array+j);
+          *(array+j) = *(array+i);
+          *(array+i) = t;
+        }
+    }
+}
 
 /*##################################################################################*/
 /*########################### LINEAL ALGEBRA MODULE ################################*/
@@ -263,13 +276,13 @@ bool lassol(long double **XY,int xyr,int xyc, long double *&c)
 			sum += (*(*(XY+ii)+j)) * (*(c+j));
 		//printf("check2 ii=%d, m=%d\n",ii,m);
 		*(c+ii) = (*(*(XY+ii)+m)-sum)/(*(*(XY+ii)+ii));
-		//printf("check1\n");
 	}
 	return true;
 }
 
 long double** inverse(long double **A_, int A_r, int A_c)
 {
+
 	int dim = A_c;
 	long double ** A = new_array_f(A_r,A_c);
 	for (int i = 0; i < A_r; i++)
@@ -284,7 +297,7 @@ long double** inverse(long double **A_, int A_r, int A_c)
 		for (int j = 1; j < dim; j++)
 			r_max = fmaxl(fabsl(*(*(A+i)+j)), r_max);
 		if (r_max == 0)
-			printf("Error E03 in inverse(A): can't get inverse, unstable matrix.\n");
+			printf("Error E03.1 in inverse(A): can't get inverse, unstable matrix.\n");
 		long double scale = 1/r_max;
 		for (int j = 0; j < dim; j++)
 		{
@@ -309,7 +322,7 @@ long double** inverse(long double **A_, int A_r, int A_c)
 			}
 		}
 		if (big == 0)
-			printf("Error E03 in inverse(A): can't get inverse, unstable matrix.\n");
+			printf("Error E03.2 in inverse(A): can't get inverse, unstable matrix.\n");
 		if (ipiv != k)
 		{// swap rows
 			long double *temp_a;
@@ -336,7 +349,7 @@ long double** inverse(long double **A_, int A_r, int A_c)
 		}
 	}
 	if (*(*(A+dim-1)+dim-1) == 0)
-			printf("Error E03 in inverse(A): can't get inverse, unstable matrix.\n");
+			printf("Error E03.3 in inverse(A): can't get inverse, unstable matrix.\n");
 	// back substitution
 	for (int l = 0; l < dim; l++)
 	{
@@ -372,17 +385,18 @@ void print(long double **A, int ar, int ac)
 	for (int i = 0; i < ar; i++) print(*(A+i),ac);
 }
 
-void print(int *u, int len)
+void printInt(long double *u, int len)
 {
 	printf("[ ");
-	for (int i = 0; i < len; i++) printf("%d ", *(u+i));
+	for (int i = 0; i < len; i++) printf("%3.0Lf ", *(u+i));
 	printf("]\n");
 }
 
-void print(int **A, int ar, int ac)
+void printInt(long double **A, int ar, int ac)
 {
-	for (int i = 0; i < ar; i++) print(*(A+i),ac);
+	for (int i = 0; i < ar; i++) printInt(*(A+i),ac);
 }
+
 
 /*
 ** reads a csv file and return data matrix M
@@ -624,8 +638,8 @@ void stabilize(long double **&A, int ar, int ac, long double factor)
 		for (int j = 0; j < ac; j++)
 		{
 			random = rand01();
-			if(*(*(A+i)+j) == 0) 
-				*(*(A+i)+j) = *(*(A+i)+j) + random*factor;
+			if(*(*(A+i)+j) == 0 || *(*(A+i)+j) < 1e-8) 
+				*(*(A+i)+j) += random*factor;
 			else *(*(A+i)+j) = (*(*(A+i)+j)) * (1+random*factor);
 		}
 	}
@@ -646,7 +660,7 @@ void swap_vector(long double **&outter,int o_r,int o_c, long double **&inner,int
 	*(amp1) = mu;
 	for (int i = 1; i < bc; ++i) *(amp1+i) = *(*(outter+IE)+i-1);
 	long double *lambdas = mul(amp1,bc, B,br,bc);
-	long double betha_max = -10000;
+	long double betha_max = -1e38;
 	long double betha;
 	int bmi = -1; // betha max index
 	for (int i = 0; i < bc; ++i)
@@ -659,7 +673,8 @@ void swap_vector(long double **&outter,int o_r,int o_c, long double **&inner,int
 		}
 	}
 
-	// printf(" Swapping %d for %d\n", bmi+1, IE+bc);
+	// print(inner, ir,ic);
+	// printf("oc=%d Swapping %d for %d\n",o_c, bmi+1, IE+bc);
 	
 	*(*(inner+bmi)) = mu;
 	for (int i = 0; i < o_c; ++i)
@@ -715,7 +730,6 @@ void get_tst_errors(long double **terms, int nt,int nv, long double *coef, long 
 		long double y_cap = 0;
 		for (int j = 0; j < nt; j++)
 			y_cap += (*(coef+j)) * (*(*(mapped+i)+j));
-		
 		error = *(*(mapped+ i)+ nt) - y_cap;
 		rms_error += error*error;
 		
@@ -746,14 +760,14 @@ long double get_trn_RMS(long double **MAP,int mr,int mc, long double *c, int cl)
 	for (int i = 0; i < mr; i++)
 	{
 		long double y_cap = 0;
-		for (int j = 0; j < mc-1; j++)
+		for (int j = 0; j < cl; j++)
 			y_cap += (*(c+j)) * (*(*(MAP+i)+j));
-		
-		error = *(*(MAP+ i)+ mc) - y_cap;
+		error = *(*(MAP+ i)+ mc-1) - y_cap;
 		rms_error += error*error;
 		
 	}
-	rms_error /= ts_rows;
+	// printf("rms_error = %Lf\n",rms_error );
+	rms_error /= mr;
 	rms_error = sqrtl(rms_error);
 	return rms_error;
 }
@@ -788,17 +802,11 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 
 	char* filename = train_file;
 	// dimensions of the original dataset
-	int rows = 300; 
-	int fields = 4;
+	int rows = tr_rows;
+	int fields = tr_cols;
 	// dimensions of the mapped dataset
 	int dr,dc;
 	
-
-
-	// printf("Training filename: \n");
-	// scanf("%s",filename);
-	// printf("data shape(rows fields):");
-	// scanf("%d %d",&rows,&fields);
 	// read data
 	long double **data = read_csv(filename,'\t', rows, fields);
 	// free(filename);
@@ -812,6 +820,8 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 
 	// stabilize data
 	stabilize(MAP,dr,dc, stab_fac);
+	// printf("stabilized:\n");
+	// print(MAP,dr,dc);
 	
 	// split data
 	long double **inner_ = new_array_f(M,dc);
@@ -819,28 +829,26 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 	first(MAP,dr,dc, inner_,M, outter);
 
 	//to_text((char*)"M_outter.csv",outter,dr,dc);
-
-	// printf("Inner set:\n");
-	// print(inner);
-	// printf("\nOutter set:\n");
-	// print(outter);
 	
 	// get minimax signs
 	int ar = M;
 	int ac = dc+1; // +1 because of the signs column
 	long double **A = new_array_f(ar,ac); // A = Matrix augmented with column of signs 
+
+	// printf("M = %d, dc = %d\n", M,dc);
+	// print(inner_, M,dc);
 	get_signs(inner_,M,dc, A);
 	for(int i = 0; i < M; i++) free(*(inner_+i));
-		// printf("check1\n");
 	free(inner_);
 	//to_text((char*)"A_inner.csv",A,ar,ac);
 
 	// get matrix A
 	// get 1st inverse
+	// print(A, ar,ac-1);
 	long double **B = inverse(A,ar,ac-1);
 	int iteration = 1;
 	char cont_flag;
-
+	
 	while(true)
 	{
 		get_coeff(B,ar,ac-1, A, c, m, epsilon_th);
@@ -865,7 +873,7 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 	}
 	eps_ph = epsilon_ph;
 	eps_th = epsilon_th;
-	trn_rms = get_trn_RMS(MAP,dr+M,dc, c,M);
+	trn_rms = get_trn_RMS(MAP,dr+M,dc, c,m);
 	get_tst_errors(terms,tr,tc, c, tst_rms, tst_mmx);
 	
 
@@ -883,25 +891,104 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 /*###################### GENETIC ALGORITHM(EGA) ########################*/
 /*######################################################################*/
 
+/*
+** true if term is already in individual, false otherwise
+*/
+bool term_in_ind(long double *ind,int il, long double *T, int nv)
+{
+	int total_terms = il/nv;
+	for (int i = 0; i < total_terms; i++)
+	{
+		bool equal = true;
+		for (int j = 0; j < nv; j++)
+		{
+			if(*(T+j) != *(ind+(i*nv)+j)) {equal = false; break;}
+		}
+		if(equal) return true;
+	}
+	return false;
+}
+
+/*
+** creates a valid term
+*/
+
+long double* gen_valid_term(int nv)
+{
+	//1 chose degree form a normal distribution
+	int deg_i = powers[randint(0,19)];
+	int sum_i = 0;
+	int nv_i = 0;
+	//2 find the combination of the powers wich adds to chosen degree
+	long double *term = new_array_f(nv);
+	while(nv_i < nv)
+	{
+		int r = randint(1,deg_i);
+		sum_i += r;
+		if(sum_i > deg_i)
+		{
+			sum_i -= r;
+			break;
+		}
+		*(term+nv_i) = r;
+		nv_i++;
+	}
+	if(nv_i <= nv-1) *(term+nv_i) = deg_i-sum_i;
+	if(nv_i == nv && sum_i < deg_i) *(term+nv_i-1) += deg_i-sum_i;
+	//3 shufle powers
+	shuffle(term,nv);
+	return term;
+}
+
 /* gen population N= number of individuals, L= Length of each individual,
 ** nt= number of terms, nv= number of variables, bid= bits in digit,
 ** max_deg= maximum degree */
-long double** gen_population(int N, int L, int nt, int nv, int bid, int max_deg)
+long double** gen_population(int N, int L, int nt, int nv/*, int bid, int max_deg*/)
 {
 	long double **pop = new_array_f(2*N,L);
 	for (int ii = 0; ii < N; ii++)
 	{
 		// naive generation of individuals(fully random)
-		for (int bi = 0; bi < L; bi++)
-			*(*(pop+ii)+bi) = round(rand01());
+		// for (int bi = 0; bi < L; bi++)
+		// 	*(*(pop+ii)+bi) = round(rand01());
 		// making a single individual
-		//1 chose degree form a normal distribution
-		//2 find the combination of the powers wich adds to chosen degree
-		//3 shufle powers
-		//4 if ok insert ocurrences separated by ','
-		//5 concatenate valid combinations without ','
+		for (int ti = 0; ti < nt; ti++) // for each term
+		{
+			//generate valid term
+			long double *term =gen_valid_term(nv);
+			if (term_in_ind(*(pop+ii),L,term,nv)) // if term is already there get another one
+			{
+				ti--;
+				continue;
+			}
+			for (int t = 0; t < nv; t++)
+				*(*(pop+ii)+ t +(ti*nv)) = *(term+t);
+			free(term);
+		}
+
 	}
 	return pop;
+}
+
+void repair(long double **&pop,int N,int L,int nt,int nv)
+{
+	for (int ii = 0; ii < N; ii++)
+	{
+		for (int ti = 0; ti < nt; ti++)
+		{
+			long double *term = new_array_f(nv);
+			for (int vi = 0; vi < nv; vi++) *(term+vi) = *(*(pop+ii)+(ti*nv)+vi);
+			
+			if(term_in_ind(*(pop+ii),L,term,nv))
+			{
+				long double *temp = gen_valid_term(nv);
+				// while(term_in_ind(*(pop+ii),L,temp,nv)) temp = gen_valid_term(nv);
+				for (int vi = 0; vi < nv; vi++) *(*(pop+ii)+(ti*nv)+vi) = *(temp+vi);
+				free(temp);
+			}
+			free(term);
+		}
+	}
 }
 
 /* decodes the individual into a matrix of degrees of variables 
@@ -951,8 +1038,11 @@ void evaluate(long double **pop, long double *&fit_tr_mmx, long double *&fit_tr_
 	long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms;
 	for (int ii = ini; ii < fin; ii++)
 	{
-		long double **terms = decode_bin(*(pop+ii),nt,nv,bid);
-		long double *c = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms);
+		long double **terms = decode_dec(*(pop+ii),nt,nv);
+		
+		// printf("\nEvaluating:\n");
+		// print(terms, nt,nv);
+		long double *c = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
 		free(c);
 		free(terms);
 		*(fit_ts_mmx+ii) = tst_mmx; // test minimax error
@@ -995,8 +1085,13 @@ void mutate(long double **&pop, int N, int L, int b2m)
 	{
 		int p1 = round(rand01()*L)-1;
 		int p2 = round(rand01()*N)-1;
-		if(*(*(pop+p2)+p1) == 0) *(*(pop+p2)+p1) = 1;
-		else *(*(pop+p2)+p1) = 0;
+
+		// if(*(*(pop+p2)+p1) == 0) *(*(pop+p2)+p1) = 1;
+		// else *(*(pop+p2)+p1) = 0;
+
+		int temp = randint(0,max_deg);
+		while (temp == *(*(pop+p2)+p1)) temp = randint(0,max_deg);
+		*(*(pop+p2)+p1) = temp;
 	}
 }
 
@@ -1071,12 +1166,12 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	char* f_test = test_file; // (char*)"DB24-glass/TEST.TXT";
 
 	// derivated parameters
-	int BID = ceil(log2(max_deg));
+	int BID = 1;//ceil(log2(max_deg));
 	int L = NT*NV*BID;
 	int b2m = round(L*N*Pm); // parameter for later calculations
 
 	// generate random population
-	long double **pop = gen_population(N,L, NT, NV, BID, max_deg);
+	long double **pop = gen_population(N,L, NT, NV);//, BID, max_deg);
 	// evaluate population
 	double long *fit_tr_mmx = new_array_f(N*2);
 	double long *fit_tr_rms = new_array_f(N*2);
@@ -1094,43 +1189,38 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 		annular_cross(pop, N, L, Pc);
 		// mutation
 		mutate(pop, N, L, Pm);
+		// repair population
+		repair(pop, N, L, NT, NV);
 		// evaluate new population
 		evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV, BID);
 		// sort population and fitness
 		// and print results
-		printf("check1\n");
+		//printf("check1\n");
 		switch(minimize)
 		{
-			case TST_RMS:
+			case RMS:
 				sort(pop, fit_ts_rms,fit_tr_mmx,fit_tr_rms,fit_ts_mmx, 2*N);
 				print_scores(fit_ts_rms, 20);
 				break;
-			case TST_MMX:
+			case MMX:
 				sort(pop, fit_ts_mmx,fit_ts_rms,fit_tr_mmx,fit_tr_rms, 2*N);
 				print_scores(fit_ts_mmx, 20);
 				break;
-			case TRN_MMX:
-				sort(pop, fit_tr_mmx,fit_ts_rms,fit_tr_rms,fit_ts_mmx, 2*N);
-				print_scores(fit_tr_mmx, 20);
-				break;
-			case TRN_RMS:
-				sort(pop, fit_tr_rms,fit_ts_rms,fit_tr_mmx,fit_ts_mmx, 2*N);
-				print_scores(fit_tr_rms, 20);
-				break;
-
 		}
 
-		printf("best train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
+		system("clear");
+		printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
 			*(fit_tr_rms),*(fit_ts_rms),*(fit_tr_mmx),*(fit_ts_mmx));
 
 	}
 	printf("Best individual: \n");
-	long double **terms = decode_bin(*(pop),NT,NV,BID);
+	long double **terms = decode_dec(*(pop),NT,NV);
 	printf("Terms:\n");
-	print(terms,NT,NV);
+	printInt(terms,NT,NV);
 	long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms;
-	long double *c = ascend(terms,NT,NV,eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms);
-	printf("Minimax error: %Lf\n", *(fit_ts_mmx));
+	long double *c = ascend(terms,NT,NV,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
+	// printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
+	// 		trn_rms,tst_rms,trn_mmx,tst_mmx);
 	printf("coefficients:\n");
 	print(c,NT);
 
@@ -1143,30 +1233,57 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 
 int main(int argc, char const *argv[])
 {
-	srand(rseed);
-
-	// int terms_r, terms_c;
-	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms; // errores interno y externo
-	// terms_c = tr_cols-1;
-	
-	// long double *vars = new_array_f(terms_c); // arreglo de 3 variables
-	// // max grade of each variable
-	// *(vars+0) = 2;
-	// *(vars+1) = 2;
-	// *(vars+2) = 2;
-	// long double **terms = get_terms(vars,terms_c,terms_r); // el tamaño de filas se guarda en terms_r
-	// // // or 
-	// // // long double **terms = read_csv("terms.conf",terms_c,terms_r);
-	
-	// long double *coef = ascend(terms,terms_r,terms_c, eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms);
-	// printf("coefficients found:\n");
-	// print(coef,terms_r);
-	// printf("Epsilon th=%Lf Epsilon ph=%Lf\n", eps_th, tst_mmx);
-
+	srand(time(NULL));
+	// srand(rseed);
 	run_ega();
+
+	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms; // errores interno y externo
+	// long double **terms = read_csv((char*)"terms2.conf",'\t',NT,NV);
+	// printInt(terms,NT,NV);	
+	// long double *coef = ascend(terms,NT,NV, eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
+	// printf("coefficients found:\n");
+	// printInt(coef,NT);
+	// printf("train minimax=%Lf test minimax=%Lf\ntrain rms=%Lf test rms=%Lf\n", trn_mmx, tst_mmx, trn_rms, tst_rms);
+
+
+	// long double *term = gen_valid_term(20);
+	// printf("generated term:\n");
+	// print(term,20);
+	// int suma = 0;
+	// for (int i = 0; i < 20; ++i) suma += term[i];
+	// printf("suma %d\n", suma);
+
+	// long double **population = gen_population(10,30, 5, 6, 0, 20);
+	// printf("poblacion:\n");
+	// print(population,10,30);
+	// // printf("decoded:\n");
+	// print(decode_dec(population))
+
+	// long double *ind = new_array_f(12); // 4 terms 3 vars
+	// ind[0] = 1;
+	// ind[1] = 2;
+	// ind[2] = 3;
+	// ind[3] = 4;
+	// ind[4] = 5;
+	// ind[5] = 6;
+	// ind[6] = 7;
+	// ind[7] = 8;
+	// ind[8] = 9;
+	// ind[9] = 10;
+	// ind[10] = 11;
+	// ind[11] = 12;
+	// long double *term = new_array_f(3);
+	// term[0] = 4;
+	// term[1] = 5;
+	// term[2] = 6;
+	// if (term_in_ind(ind,12,term,3))
+	// {
+	// 	printf("term is in individual\n");
+	// }
+	// else printf("term is not in individual\n");
+
 	// long double **Ix = new_Ix(lx);
 	// long double **A = new_array_f(lx,ly);
-
 	// *(*(A+0)+0) = 1;
 	// *(*(A+0)+1) = 1;
 	// *(*(A+0)+2) = 1;

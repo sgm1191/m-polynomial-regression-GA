@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 
 
 
-train_file = 'DB24-glass/TRAIN.TXT'
-test_file = 'DB24-glass/TEST.TXT'
+train_file = 'z3Vars.dat'
+test_file = 'z3Vars.dat'
 quasi = True
 quasi_minimax = .05
 stabilzation_factor = 1e-6
@@ -28,18 +28,14 @@ map_test_data_X = None
 map_test_data_Y = None
 
 variables = np.array([
-[0,1,0,0,0,0,0,0,0],
-[1,0,0,0,0,0,2,0,0],
-[0,0,0,1,0,0,2,0,0],
-[0,5,0,0,0,0,0,0,0],
-[0,0,0,0,0,0,5,0,0],
-[2,0,0,0,0,3,2,0,0],
-[0,1,1,1,2,1,1,2,0],
-[1,1,0,0,0,6,1,0,0],
-[0,0,12,1,0,2,0,0,0],
-[0,1,0,1,0,3,4,18,0],
-[0,3,17,0,0,4,11,0,0],
-[0,0,33,0,10,2,0,0,0]])
+[ 0, 0, 0 ],
+[ 0, 0, 1 ],
+[ 0, 1, 0 ],
+[ 0, 1, 1 ],
+[ 1, 0, 0 ],
+[ 1, 0, 1 ],
+[ 1, 1, 0 ],
+[ 1, 1, 1 ]])
 	
 
 
@@ -177,7 +173,7 @@ def ascend(m):
 		coefficients,int_err = get_approximant(B, inner_f)
 		ext_err,Ie,mu = test_aproximant(outter_set, coefficients, outter_f)
 		
-		#print("IT[%d] EpsTh(in):%f \tEpsPh(out):%f  "%(iteration, int_err, ext_err))
+		print("IT[%d] EpsTh(in):%f \tEpsPh(out):%f  "%(iteration, int_err, ext_err))
 		EpsTh = np.insert(EpsTh,EpsTh.shape[0],int_err)
 		EpsPh = np.insert(EpsPh,EpsPh.shape[0],ext_err)
 		if (int_err >= ext_err) or (quasi and abs(int_err-ext_err)<=quasi_minimax):
@@ -189,7 +185,7 @@ def ascend(m):
 		iteration += 1
 		#ok = input("\n>> Continue?(y/n) ")
 		#if ok=="n": break
-	#print("IT[%d] EpsTh(in):%f \tEpsPh(out):%f  "%(iteration, int_err, ext_err))
+	print("IT[%d] EpsTh(in):%f \tEpsPh(out):%f  "%(iteration, int_err, ext_err))
 
 
 	# train rms
@@ -277,6 +273,7 @@ def go():
 	#                      [2,1],
 	#                      [2,2]])
 	## ejemplo para z3Vars.dat como el del pdf
+
 	## ejemplo para V4.txt con grados 1 1 1 1
 	# variables = np.array([[0,0,0,0],
 	#                       [0,0,0,1],
