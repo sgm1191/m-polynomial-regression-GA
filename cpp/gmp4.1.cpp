@@ -13,9 +13,9 @@ const int powers[] = { 1, 3, 5, 7, 9,
 					  11,15,21,25,27,
 					  33,35,45,49,55,
 					  63,77,81,99,121};
-double rseed = 12345;
 const int MMX = 1;
 const int RMS = 2;
+const double rseed = 12345;
 
 // file parameters
 char* train_file = (char*)"DB16-concrete/TRAIN.TXT";//"z3Vars_sc.dat";
@@ -29,18 +29,18 @@ int ts_cols = 9;//4;
 long double stab_fac = 1e-6;
 long double quasi = 0.05;
 bool Q_F = true;
-int minimize = MMX;
+int minimize = RMS;
 
 // parameters of the EGA
 double Pc = 1; // crossover probability
 double Pm = .05; // mutation probability
 int gen = 100; // number of generations
-int N = 100; // number of individuals
+int N = 25; // number of individuals
 int max_deg = 121; // maximum degree of the variables
 
 // parameters inferred from the dataset
 int NV = 8; // number of independent variables
-int NT = 6; // number of terms
+int NT = 7; // number of terms
 
 
 
@@ -409,7 +409,7 @@ long double** read_csv(char *filename, char separator, int rows, int fields)
 	FILE* stream = fopen(filename, "r");
 	if(stream == NULL)
 	{
-		printf("Error E00 in read_csv(filename,sep,rows,fields): file does not exists.\n");
+		printf("Error E00.1 in read_csv(filename,sep,rows,fields): file does not exists.\n");
 	}
 	long double **data = new_array_f(rows, fields);
 	int c = fgetc(stream);
@@ -457,6 +457,81 @@ void to_text(char *filename, long double **A, int ar,int ac)
 		fprintf(csv,"\n");
 	}
 	fclose(csv);
+}
+
+void get_rows_and_cols(char *filename,char sep, int &rows, int &cols)
+{
+	FILE* stream = fopen(filename, "r");
+	if(stream == NULL)
+	{
+		printf("Error E00.2 in get_rows_and_cols(filename,sep): file does not exists.\n");
+	}
+	int r = 0;
+	int c = 1;
+	char ch = fgetc(stream);
+	while(ch != '\n')
+	{
+		if(ch==sep) c++;
+		ch = fgetc(stream);
+	}
+	r++;
+	ch = fgetc(stream);
+	while(ch != EOF)
+	{
+		//printf("check2\n");
+		while(ch != '\n') ch = fgetc(stream);
+		r++;
+		ch = fgetc(stream);
+	}
+	fclose(stream);
+	rows = r;
+	cols = c;
+
+}
+
+void read_input()
+{
+	FILE* stream = fopen((char*)"configuration.conf", "r");
+	if(stream == NULL)
+	{
+		printf("Error E09 in get_rows_and_cols(filename,sep): file does not exists.\n");
+	}
+	char c;
+	for (int i = 0; i < 12; ++i) // 12 inputs, check configuration file
+	{
+		int j = 0;
+		char* input = (char*)malloc(sizeof(char)*30);
+		char* value = (char*)malloc(sizeof(char)*30);
+		c = fgetc(stream);
+		while(c != ' ') { input[j++] = c; c = fgetc(stream); }
+		input[j] = '\0';
+		while(c == ' ' || c == '=') c = fgetc(stream);
+		j = 0;
+		while(c != '\n' && c != EOF ) { value[j++] = c; c = fgetc(stream); }
+		value[j] = '\0';
+		// printf("input = %s, value = %s\n", input,value);
+		if (i == 0) train_file = value;
+		else if (i == 1) test_file = value;
+		else if (i == 2) stab_fac = str2double(value);
+		else if (i == 3) quasi = str2double(value);
+		else if (i == 4) Q_F = ((str2int(value) == 1));
+		else if (i == 5) minimize = (1 == str2int(value))? MMX : RMS;
+		else if (i == 6) Pc = str2double(value);
+		else if (i == 7) Pm = str2double(value);
+		else if (i == 8) gen = str2int(value);
+		else if (i == 9) N = str2int(value);
+		else if (i == 10) max_deg = str2int(value);
+		else if (i == 11) NT = str2int(value);
+		free(input);
+		//free(value);
+	}
+	fclose(stream);
+	get_rows_and_cols(train_file,'\t',tr_rows,tr_cols);
+	get_rows_and_cols(test_file,'\t',ts_rows,ts_cols);
+	NV = tr_cols - 1;
+	printf("tr_rows=%d, tr_cols=%d\n", tr_rows,tr_cols);
+	printf("ts_rows=%d, ts_cols=%d\n", ts_rows,ts_cols);
+
 }
 
 /*################################################################*/
@@ -873,6 +948,7 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 	}
 	eps_ph = epsilon_ph;
 	eps_th = epsilon_th;
+
 	trn_rms = get_trn_RMS(MAP,dr+M,dc, c,m);
 	get_tst_errors(terms,tr,tc, c, tst_rms, tst_mmx);
 	
@@ -916,7 +992,8 @@ bool term_in_ind(long double *ind,int il, long double *T, int nv)
 long double* gen_valid_term(int nv)
 {
 	//1 chose degree form a normal distribution
-	int deg_i = powers[randint(0,19)];
+
+	int deg_i = powers[randint(0,max_deg)];
 	int sum_i = 0;
 	int nv_i = 0;
 	//2 find the combination of the powers wich adds to chosen degree
@@ -955,7 +1032,7 @@ long double** gen_population(int N, int L, int nt, int nv/*, int bid, int max_de
 		for (int ti = 0; ti < nt; ti++) // for each term
 		{
 			//generate valid term
-			long double *term =gen_valid_term(nv);
+			long double *term = gen_valid_term(nv);
 			if (term_in_ind(*(pop+ii),L,term,nv)) // if term is already there get another one
 			{
 				ti--;
@@ -1175,8 +1252,8 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	// evaluate population
 	double long *fit_tr_mmx = new_array_f(N*2);
 	double long *fit_tr_rms = new_array_f(N*2);
-	double long *fit_ts_mmx = new_array_f(N*2); 
-	double long *fit_ts_rms = new_array_f(N*2); 
+	double long *fit_ts_mmx = new_array_f(N*2);
+	double long *fit_ts_rms = new_array_f(N*2);
 	evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV, BID);
 
 	for (int g = 0; g < gen; g++)
@@ -1195,7 +1272,6 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 		evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV, BID);
 		// sort population and fitness
 		// and print results
-		//printf("check1\n");
 		switch(minimize)
 		{
 			case RMS:
@@ -1235,7 +1311,8 @@ int main(int argc, char const *argv[])
 {
 	srand(time(NULL));
 	// srand(rseed);
-	run_ega();
+	// run_ega();
+
 
 	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms; // errores interno y externo
 	// long double **terms = read_csv((char*)"terms2.conf",'\t',NT,NV);
@@ -1244,6 +1321,43 @@ int main(int argc, char const *argv[])
 	// printf("coefficients found:\n");
 	// printInt(coef,NT);
 	// printf("train minimax=%Lf test minimax=%Lf\ntrain rms=%Lf test rms=%Lf\n", trn_mmx, tst_mmx, trn_rms, tst_rms);
+	
+
+	system("clear");
+	read_input();
+	printf("FILE DEFINITION\n\n");
+	printf("TRAIN FILE = %s\n",train_file);
+	printf("TEST FILE  = %s\n",test_file);
+	printf("--------------------------------\n\n");
+	printf("STABILIZATION FACTOR = %Lf\n",stab_fac);
+	printf("QUASI MINIMAX CONDITION = %s\n",(char*)((Q_F == 1)? "true":"false"));
+	printf("QUASI MINIMAX VALUE = %Lf\n",quasi);
+	printf("OPTIMIZE = %s\n",(char*)((minimize == MMX)? "minimax":"rms"));
+	printf("--------------------------------\n\n");
+	printf("CROSS PROBABILITY = %f\n",Pc);
+	printf("MUTATION PROBABILITY = %f\n",Pm);
+	printf("GENERATIONS = %d\n",gen);
+	printf("INDIVIDUALS = %d\n",N);
+	printf("MAXIMUM DEGREE = %d\n",max_deg);
+	printf("--------------------------------\n\n");
+	printf("NUMBER OF TERMS = %d\n",NT);
+
+
+	char r;
+	printf("\nProceed? [y/n]: ");
+	scanf("%c",&r);
+	if (r == 'y')
+	{
+		run_ega();
+	}
+	else if (r == 'n')
+	{
+		printf("\nProcess aborted. Edit configuration.conf file if you wish and try again.\n\n");
+	}
+	else
+	{
+		printf("\nFATAL ERROR!!! Invalid Option. Program has crashed.\n\n");
+	}
 
 
 	// long double *term = gen_valid_term(20);
