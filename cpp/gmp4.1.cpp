@@ -44,7 +44,7 @@ int N; // number of individuals
 int max_deg; // maximum degree of the variables
 double mu; // standar deviation for the degrees in the terms of the individuals
 double sigma;
-//long double **coeffs;
+long double **coeffs;
 
 
 // parameters inferred from the dataset
@@ -146,7 +146,8 @@ long double** new_Ix(int size)//Ix is squared
 
 long double** new_array_f(int rows, int cols)
 {
-	long double **A = (long double**) malloc(sizeof(long double*)*rows);
+	//long double **A = (long double**) calloc(rows,sizeof(long double));
+	long double **A = (long double**) calloc(rows,sizeof(long double*)*rows);
 	for (int i = 0; i < rows; ++i) *(A+i) =  (long double*) calloc(cols,sizeof(long double));
 	return A;
 }
@@ -1183,8 +1184,8 @@ void evaluate(long double **pop, long double *&fit_tr_mmx, long double *&fit_tr_
 		
 		// printf("\nEvaluating:\n");
 		// print(terms, nt,nv);
-		//*(coeffs+ii) = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
-		long double *c = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
+		*(coeffs+ii) = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
+		// long double *c = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
 		free(terms);
 		*(fit_ts_mmx+ii) = tst_mmx; // test minimax error
 		*(fit_ts_rms+ii) = tst_rms; // test RMS error
@@ -1269,9 +1270,9 @@ void sort(long double **&pop, long double *&fit, long double *&fit2,long double 
 				*(pop+j) = ind;
 				//free(ind);
 				// swap coefficients
-				// long double *c = *(coeffs+i);
-				// *(coeffs+i) = *(coeffs+j);
-				// *(coeffs+j) = c;
+				long double *c = *(coeffs+i);
+				*(coeffs+i) = *(coeffs+j);
+				*(coeffs+j) = c;
 				//free(c);
 			}  
 		}
@@ -1290,10 +1291,10 @@ void duplicate(long double **&pop,int N,int L, long double *&fit, long double *&
 		*(fit2+i+N) = *(fit2+i);
 		*(fit3+i+N) = *(fit3+i);
 		*(fit4+i+N) = *(fit4+i);		
+	    *(coeffs+i+N) = *(coeffs+i);
 		for (int j = 0; j < L; j++)
 		{
 			*(*(pop+i+N)+j) = *(*(pop+i)+j);
-			// *(*(coeffs+i+N)+j) = *(*(coeffs+i)+j);
 		}
 
 	}
@@ -1367,7 +1368,6 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	long double *fit_ts_rms = new_array_f(N*2);
 	// evaluate population
 	evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV);
-
 	for (int g = 0; g < gen; g++)
 	{
 		printf("\nGeneration %d:\n",g);
@@ -1425,56 +1425,57 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 			*(fit_tr_rms),*(fit_ts_rms),*(fit_tr_mmx),*(fit_ts_mmx));
 
 	}
-	printf("Best individual: \n");
-	long double **terms = decode_dec(*(pop),NT,NV);
-	printf("Terms:\n");
-	printInt(terms,NT,NV);
-	long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms;
-	long double *c = ascend(terms,NT,NV,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
-	printf("coefficients:\n");
-	print(c,NT);
-	printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
-			trn_rms,tst_rms,trn_mmx,tst_mmx);
+	// printf("Best individual: \n");
+	// long double **terms = decode_dec(*(pop),NT,NV);
+	// printf("Terms:\n");
+	// printInt(terms,NT,NV);
+	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms;
+	// long double *c = ascend(terms,NT,NV,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
+	// printf("coefficients:\n");
+	// print(c,NT);
+	// printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
+	// 		trn_rms,tst_rms,trn_mmx,tst_mmx);
 	
-	recall((char*)"TST_",c,terms,NT,NV);
+	// recall((char*)"TST_",c,terms,NT,NV);
 
 	int best;
+	long double **terms;
 
-	// best = get_best(fit_tr_mmx,N);
-	// terms = decode_dec(*(pop+best),NT,NV);
-	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_mmx+best));
-	// printf("terms: \n");
-	// printInt(terms,NT,NV);
-	// printf("\t coefficients:\n");
-	// print(*(coeffs+best),NT);
-	// recall((char*)"TRN_MMX",*(coeffs+best),terms,NT,NV);
+	best = get_best(fit_tr_mmx,N);
+	terms = decode_dec(*(pop+best),NT,NV);
+	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_mmx+best));
+	printf("terms: \n");
+	printInt(terms,NT,NV);
+	printf("\t coefficients:\n");
+	print(*(coeffs+best),NT);
+	recall((char*)"TRN_MMX",*(coeffs+best),terms,NT,NV);
 
-	// best = get_best(fit_ts_mmx,N);
-	// terms = decode_dec(*(pop+best),NT,NV);
-	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_mmx+best));
-	// printf("terms: \n");
-	// printInt(terms,NT,NV);
-	// printf("\t coefficients:\n");
-	// print(*(coeffs+best),NT);
-	// recall((char*)"TST_MMX",*(coeffs+best),terms,NT,NV);
+	best = get_best(fit_ts_mmx,N);
+	terms = decode_dec(*(pop+best),NT,NV);
+	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_mmx+best));
+	printf("terms: \n");
+	printInt(terms,NT,NV);
+	printf("\t coefficients:\n");
+	print(*(coeffs+best),NT);
+	recall((char*)"TST_MMX",*(coeffs+best),terms,NT,NV);
 
-	// best = get_best(fit_tr_rms,N);
-	// terms = decode_dec(*(pop+best),NT,NV);
-	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_rms+best));
-	// printf("terms: \n");
-	// printInt(terms,NT,NV);
-	// printf("\t coefficients:\n");
-	// print(*(coeffs+best),NT);
-	// recall((char*)"TRN_RMS",*(coeffs+best),terms,NT,NV);
+	best = get_best(fit_tr_rms,N);
+	terms = decode_dec(*(pop+best),NT,NV);
+	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_rms+best));
+	printf("terms: \n");
+	printInt(terms,NT,NV);
+	printf("\t coefficients:\n");
+	print(*(coeffs+best),NT);
+	recall((char*)"TRN_RMS",*(coeffs+best),terms,NT,NV);
 
-	// best = get_best(fit_ts_rms,N);
-	// terms = decode_dec(*(pop+best),NT,NV);
-	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_rms+best));
-	// printf("terms: \n");
-	// printInt(terms,NT,NV);
-	// printf("\t coefficients:\n");
-	// print(*(coeffs+best),NT);
-	// recall((char*)"TST_RMS",*(coeffs+best),terms,NT,NV);
+	best = get_best(fit_ts_rms,N);
+	terms = decode_dec(*(pop+best),NT,NV);
+	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_rms+best));
+	printf("terms: \n");
+	printInt(terms,NT,NV);
+	printf("\t coefficients:\n");
+	print(*(coeffs+best),NT);
+	recall((char*)"TST_RMS",*(coeffs+best),terms,NT,NV);
 
 	
 
@@ -1493,7 +1494,7 @@ int main(int argc, char const *argv[])
 	srand(rseed);
 	read_input();
 	// array of coefficients
-	// coeffs = new_array_f(N*2, NT);
+	coeffs = new_array_f(N*2, NT);
 	// run_ega();
 
 	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms; // errores interno y externo
