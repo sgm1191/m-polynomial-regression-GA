@@ -9,38 +9,47 @@
 /*#########################################################################*/
 
 // constants
-const int powers[] = { 1, 3, 5, 7, 9,
+const int powers[] = {0, 1, 3, 5, 7, 9,
 					  11,15,21,25,27,
 					  33,35,45,49,55,
 					  63,77,81,99,121};
 const int MMX = 1;
 const int RMS = 2;
-const double rseed = 12345;
+const int REC_TST = 1;
+const int REC_TRN = 0;
+const double rseed = 500221.000;
 
 // file parameters
-char* train_file = (char*)"DB16-concrete/TRAIN.TXT";//"z3Vars_sc.dat";
-int tr_rows = 824;//300;
-int tr_cols = 9;//4;
-char* test_file = (char*)"DB16-concrete/TEST.TXT";//"z3Vars_sc.dat";
-int ts_rows = 206;//300;
-int ts_cols = 9;//4;
+char* train_file;
+int tr_rows;
+int tr_cols;
+char* test_file;
+int ts_rows;
+int ts_cols;
+int recall_data = REC_TST;
+bool HAS_TEST = 1;
+bool HAS_RECALL = 0;
 
 // parameters of the ascend algorithm
-long double stab_fac = 1e-6;
-long double quasi = 0.05;
-bool Q_F = true;
-int minimize = RMS;
+long double stab_fac;
+long double quasi;
+bool Q_F;
+int minimize;
 
 // parameters of the EGA
-double Pc = 1; // crossover probability
-double Pm = .05; // mutation probability
-int gen = 100; // number of generations
-int N = 25; // number of individuals
-int max_deg = 121; // maximum degree of the variables
+double Pc; // crossover probability
+double Pm; // mutation probability
+int gen; // number of generations
+int N; // number of individuals
+int max_deg; // maximum degree of the variables
+double mu; // standar deviation for the degrees in the terms of the individuals
+double sigma;
+//long double **coeffs;
+
 
 // parameters inferred from the dataset
-int NV = 8; // number of independent variables
-int NT = 7; // number of terms
+int NV; // number of independent variables
+int NT; // number of terms
 
 
 
@@ -96,6 +105,15 @@ double rand01()
 int randint(int min, int max)
 {
 	return (rand() % (max + 1 - min)) + min;
+}
+
+/**/
+int get_Off()
+{
+	double Y = 0;
+	for (int i = 1; i <= 12; i++) Y += rand01();
+	Y = round(fabs(sigma*(Y-6)+mu)+.5);
+	return Y;
 }
 
 /* shuffles an array */
@@ -274,7 +292,7 @@ bool lassol(long double **XY,int xyr,int xyc, long double *&c)
 		sum = 0;
 		for (int j = ii+1; j < m; j++)
 			sum += (*(*(XY+ii)+j)) * (*(c+j));
-		//printf("check2 ii=%d, m=%d\n",ii,m);
+		////printf("check2 ii=%d, m=%d\n",ii,m);
 		*(c+ii) = (*(*(XY+ii)+m)-sum)/(*(*(XY+ii)+ii));
 	}
 	return true;
@@ -398,6 +416,31 @@ void printInt(long double **A, int ar, int ac)
 }
 
 
+void print_params()
+{
+	printf("--- FILE DEFINITION\n\n");
+	printf("TRAIN FILE = %s\n",train_file);
+	printf("TEST FILE  = %s\n",test_file);
+	if (HAS_RECALL) printf("RECALL DATA  = %s\n",((recall_data == REC_TST)? "TEST":"TRAIN"));
+	else printf("RECALL DATA  = %s\n","none");
+	printf("NUMBER OF FIELDS = %d\n",tr_cols);
+	printf("ROWS IN TRAIN FILE = %d\n",tr_rows);
+	printf("ROWS IN TEST FILE = %d\n",(HAS_TEST)? ts_rows : 0);
+	printf("--------------------------------\n\n");
+	printf("STABILIZATION FACTOR = %Lf\n",stab_fac);
+	printf("QUASI MINIMAX CONDITION = %s\n",(char*)((Q_F == 1)? "true":"false"));
+	printf("QUASI MINIMAX VALUE = %Lf\n",quasi);
+	printf("OPTIMIZE = %s\n",(char*)((minimize == MMX)? "minimax":"rms"));
+	printf("--------------------------------\n\n");
+	printf("CROSS PROBABILITY = %f\n",Pc);
+	printf("MUTATION PROBABILITY = %f\n",Pm);
+	printf("GENERATIONS = %d\n",gen);
+	printf("INDIVIDUALS = %d\n",N);
+	printf("MAXIMUM DEGREE = %d\n",max_deg);
+	printf("--------------------------------\n\n");
+	printf("NUMBER OF TERMS = %d\n",NT);
+}
+
 /*
 ** reads a csv file and return data matrix M
 ** WARNING!!!: the file must end with a number, 
@@ -464,7 +507,8 @@ void get_rows_and_cols(char *filename,char sep, int &rows, int &cols)
 	FILE* stream = fopen(filename, "r");
 	if(stream == NULL)
 	{
-		printf("Error E00.2 in get_rows_and_cols(filename,sep): file does not exists.\n");
+		printf("Error E00.2 in get_rows_and_cols(filename,sep): file %s does not exists.\n",filename);
+		exit(0);
 	}
 	int r = 0;
 	int c = 1;
@@ -478,7 +522,7 @@ void get_rows_and_cols(char *filename,char sep, int &rows, int &cols)
 	ch = fgetc(stream);
 	while(ch != EOF)
 	{
-		//printf("check2\n");
+		////printf("check2\n");
 		while(ch != '\n') ch = fgetc(stream);
 		r++;
 		ch = fgetc(stream);
@@ -494,10 +538,10 @@ void read_input()
 	FILE* stream = fopen((char*)"configuration.conf", "r");
 	if(stream == NULL)
 	{
-		printf("Error E09 in get_rows_and_cols(filename,sep): file does not exists.\n");
+		printf("Error E09 in get_rows_and_cols(filename,sep): file %s does not exists.\n", "configuration.conf");
 	}
 	char c;
-	for (int i = 0; i < 12; ++i) // 12 inputs, check configuration file
+	for (int i = 0; i < 13; ++i) // 12 inputs, check configuration file
 	{
 		int j = 0;
 		char* input = (char*)malloc(sizeof(char)*30);
@@ -509,28 +553,35 @@ void read_input()
 		j = 0;
 		while(c != '\n' && c != EOF ) { value[j++] = c; c = fgetc(stream); }
 		value[j] = '\0';
-		// printf("input = %s, value = %s\n", input,value);
+		char none[50]; strcpy(none, "none");
+		char test[50]; strcpy(test, "test");
+		char train[50]; strcpy(train, "train");
 		if (i == 0) train_file = value;
-		else if (i == 1) test_file = value;
-		else if (i == 2) stab_fac = str2double(value);
-		else if (i == 3) quasi = str2double(value);
-		else if (i == 4) Q_F = ((str2int(value) == 1));
-		else if (i == 5) minimize = (1 == str2int(value))? MMX : RMS;
-		else if (i == 6) Pc = str2double(value);
-		else if (i == 7) Pm = str2double(value);
-		else if (i == 8) gen = str2int(value);
-		else if (i == 9) N = str2int(value);
-		else if (i == 10) max_deg = str2int(value);
-		else if (i == 11) NT = str2int(value);
+		else if (i == 1) { test_file = value; if (strcmp(none, test_file) == 0) HAS_TEST = 0; else HAS_TEST = 1; }
+		else if (i == 2) { 
+			if (strcmp(value,none) == 0) HAS_RECALL = 0; 
+			else if (strcmp(value,train) == 0) { HAS_RECALL = 1; recall_data = REC_TRN; }
+			else if (strcmp(value,test) == 0 && HAS_TEST) { HAS_RECALL = 1; recall_data = REC_TST; }
+			else { printf("\n\nRecall test data must be defined, edit configuration file and try again.\n"); exit(0);}
+		}
+		else if (i == 3) stab_fac = str2double(value);
+		else if (i == 4) quasi = str2double(value);
+		else if (i == 5) Q_F = ((str2int(value) == 1));
+		else if (i == 6) minimize = (1 == str2int(value))? MMX : RMS;
+		else if (i == 7) Pc = str2double(value);
+		else if (i == 8) Pm = str2double(value);
+		else if (i == 9) gen = str2int(value);
+		else if (i == 10) N = str2int(value);
+		else if (i == 11) max_deg = str2int(value);
+		else if (i == 12) NT = str2int(value);
 		free(input);
-		//free(value);
 	}
 	fclose(stream);
+	sigma = max_deg/sqrt(10);
+	mu = 0;
 	get_rows_and_cols(train_file,'\t',tr_rows,tr_cols);
-	get_rows_and_cols(test_file,'\t',ts_rows,ts_cols);
+	if(HAS_TEST) get_rows_and_cols(test_file,'\t',ts_rows,ts_cols);
 	NV = tr_cols - 1;
-	printf("tr_rows=%d, tr_cols=%d\n", tr_rows,tr_cols);
-	printf("ts_rows=%d, ts_cols=%d\n", ts_rows,ts_cols);
 
 }
 
@@ -710,7 +761,7 @@ void stabilize(long double **&A, int ar, int ac, long double factor)
 	double random;
 	for (int i = 0; i < ar; i++)
 	{
-		for (int j = 0; j < ac; j++)
+		for (int j = 0; j < ac-1; j++) // -1 to ommit dependent variable column
 		{
 			random = rand01();
 			if(*(*(A+i)+j) == 0 || *(*(A+i)+j) < 1e-8) 
@@ -748,8 +799,7 @@ void swap_vector(long double **&outter,int o_r,int o_c, long double **&inner,int
 		}
 	}
 
-	// print(inner, ir,ic);
-	// printf("oc=%d Swapping %d for %d\n",o_c, bmi+1, IE+bc);
+	// printf("%d\t%d",bmi+1, IE+bc+1);
 	
 	*(*(inner+bmi)) = mu;
 	for (int i = 0; i < o_c; ++i)
@@ -759,7 +809,7 @@ void swap_vector(long double **&outter,int o_r,int o_c, long double **&inner,int
 		*(*(outter+IE)+i) = temp;
 	}
 	// printf("\nLambda Vector:\n");
-	// print(lambdas);
+	// print(lambdas, bc);
 	// printf("\n");
 
 	// calculate new inverse
@@ -873,7 +923,7 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 	int M = m+1;
 	long double epsilon_th,epsilon_ph;
 	long double *c = new_array_f(m); // coefficient vector
-
+	char z;
 
 	char* filename = train_file;
 	// dimensions of the original dataset
@@ -895,27 +945,29 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 
 	// stabilize data
 	stabilize(MAP,dr,dc, stab_fac);
-	// printf("stabilized:\n");
-	// print(MAP,dr,dc);
-	
+	// to_text((char*)"MAPPED.xls",MAP,dr,dc);
+
 	// split data
 	long double **inner_ = new_array_f(M,dc);
 	long double **outter = new_array_f(dr-M,dc);
 	first(MAP,dr,dc, inner_,M, outter);
 
-	//to_text((char*)"M_outter.csv",outter,dr,dc);
+	// to_text((char*)"inner.xls",inner_,M,dc);
+	// to_text((char*)"outter.xls",outter,dr-M,dc);
 	
 	// get minimax signs
 	int ar = M;
 	int ac = dc+1; // +1 because of the signs column
 	long double **A = new_array_f(ar,ac); // A = Matrix augmented with column of signs 
 
+
 	// printf("M = %d, dc = %d\n", M,dc);
 	// print(inner_, M,dc);
 	get_signs(inner_,M,dc, A);
 	for(int i = 0; i < M; i++) free(*(inner_+i));
 	free(inner_);
-	//to_text((char*)"A_inner.csv",A,ar,ac);
+
+	// to_text((char*)"A_plus_signs.xls",A,ar,ac);
 
 	// get matrix A
 	// get 1st inverse
@@ -923,24 +975,22 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 	long double **B = inverse(A,ar,ac-1);
 	int iteration = 1;
 	char cont_flag;
-	
+
+	// to_text((char*)"1stB.xls",B,ar,ac-1);
+	long double prev_th; // para guardar los errores anteriores y checar convergencia
+	prev_th = 10;
 	while(true)
 	{
 		get_coeff(B,ar,ac-1, A, c, m, epsilon_th);
 		epsilon_ph = test_coeff(outter,dr,dc, c, m, mu, IE);
-		// printf("\n IT[%d]: eps_th = %4.10Lf eps_ph = %4.10Lf \n",iteration, epsilon_th, epsilon_ph);
-		if ((epsilon_th >= epsilon_ph) || (Q_F && fabsl(epsilon_th - epsilon_ph) <= quasi))
-		{
-			//if (Q_F)
-			//{
-				//printf("quasi minimax achieved\n");
-			//}
-			break;
-		}
-		else
-		{
-			swap_vector(outter,dr,dc, A,ar,ac, B,ar,ac-1, mu, IE);
-		}
+		// printf("\n IT[%d]: %4.10Lf\t%4.10Lf\t",iteration, epsilon_th, epsilon_ph);
+		
+		if (epsilon_th >= epsilon_ph) { /*printf("\nABSOLUTE\n");*/ break; } // Absolute convvergence
+		if (Q_F && fabsl(epsilon_ph/epsilon_th-1) <= quasi) { /*printf("\nQUASI-MMX\n");*/ break; } // quasi convergence
+		if (fabsl(epsilon_th-prev_th) < 0.0000001) { /*printf("\nDELTA %1.12Lf,%1.12Lf\n",epsilon_th,prev_th);*/ break; } // delta convergence
+		
+		swap_vector(outter,dr,dc, A,ar,ac, B,ar,ac-1, mu, IE);
+		prev_th = epsilon_th;
 		// printf("Next? (y/n): ");
 		// scanf("%c",&cont_flag);
 		// if(cont_flag=='n') break;
@@ -950,7 +1000,8 @@ long double* ascend(long double **terms, int tr, int tc, long double &eps_th, lo
 	eps_th = epsilon_th;
 
 	trn_rms = get_trn_RMS(MAP,dr+M,dc, c,m);
-	get_tst_errors(terms,tr,tc, c, tst_rms, tst_mmx);
+	if(HAS_TEST) get_tst_errors(terms,tr,tc, c, tst_rms, tst_mmx);
+	else { tst_rms = -1; tst_mmx = -1; }
 	
 
 	for(int i = 0; i < ar; i++) {free(*(A+i)); free(*(B+i));}
@@ -992,12 +1043,20 @@ bool term_in_ind(long double *ind,int il, long double *T, int nv)
 long double* gen_valid_term(int nv)
 {
 	//1 chose degree form a normal distribution
-
-	int deg_i = powers[randint(0,max_deg)];
+	int off_i = get_Off()-1;
+	int deg_i = powers[off_i];
 	int sum_i = 0;
 	int nv_i = 0;
 	//2 find the combination of the powers wich adds to chosen degree
 	long double *term = new_array_f(nv);
+	if (deg_i == 0)
+	{
+		for (int i = 0; i < nv; i++)
+		{
+			*(term+i) = 0;
+		}
+		return term;
+	}
 	while(nv_i < nv)
 	{
 		int r = randint(1,deg_i);
@@ -1053,14 +1112,19 @@ void repair(long double **&pop,int N,int L,int nt,int nv)
 	{
 		for (int ti = 0; ti < nt; ti++)
 		{
+			//printf("check.1\n");
 			long double *term = new_array_f(nv);
+			//printf("check.2\n");
 			for (int vi = 0; vi < nv; vi++) *(term+vi) = *(*(pop+ii)+(ti*nv)+vi);
-			
+			//printf("check.3\n");
 			if(term_in_ind(*(pop+ii),L,term,nv))
 			{
+				//printf("check.4\n");
 				long double *temp = gen_valid_term(nv);
+				//printf("check.5\n");
 				// while(term_in_ind(*(pop+ii),L,temp,nv)) temp = gen_valid_term(nv);
 				for (int vi = 0; vi < nv; vi++) *(*(pop+ii)+(ti*nv)+vi) = *(temp+vi);
+					//printf("check.6\n");
 				free(temp);
 			}
 			free(term);
@@ -1110,7 +1174,7 @@ long double** decode_dec(long double *ind, int nt, int nv)
 ** to the (fin-1)-th individual */
 void evaluate(long double **pop, long double *&fit_tr_mmx, long double *&fit_tr_rms, 
 	long double *&fit_ts_mmx, long double *&fit_ts_rms, 
-	int ini, int fin, int nt, int nv, int bid)
+	int ini, int fin, int nt, int nv)
 {
 	long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms;
 	for (int ii = ini; ii < fin; ii++)
@@ -1119,8 +1183,8 @@ void evaluate(long double **pop, long double *&fit_tr_mmx, long double *&fit_tr_
 		
 		// printf("\nEvaluating:\n");
 		// print(terms, nt,nv);
+		//*(coeffs+ii) = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
 		long double *c = ascend(terms,nt,nv,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
-		free(c);
 		free(terms);
 		*(fit_ts_mmx+ii) = tst_mmx; // test minimax error
 		*(fit_ts_rms+ii) = tst_rms; // test RMS error
@@ -1203,6 +1267,12 @@ void sort(long double **&pop, long double *&fit, long double *&fit2,long double 
 				long double *ind = *(pop+i);
 				*(pop+i) = *(pop+j);
 				*(pop+j) = ind;
+				//free(ind);
+				// swap coefficients
+				// long double *c = *(coeffs+i);
+				// *(coeffs+i) = *(coeffs+j);
+				// *(coeffs+j) = c;
+				//free(c);
 			}  
 		}
 	}
@@ -1221,7 +1291,11 @@ void duplicate(long double **&pop,int N,int L, long double *&fit, long double *&
 		*(fit3+i+N) = *(fit3+i);
 		*(fit4+i+N) = *(fit4+i);		
 		for (int j = 0; j < L; j++)
+		{
 			*(*(pop+i+N)+j) = *(*(pop+i)+j);
+			// *(*(coeffs+i+N)+j) = *(*(coeffs+i)+j);
+		}
+
 	}
 }
 
@@ -1234,6 +1308,44 @@ void print_scores(long double *fit, int n)
 	}
 }
 
+void recall(char* prefix, long double *c, long double **terms, int NT, int NV)
+{
+	if (!HAS_RECALL) return;
+	char filename[50];
+	int dr,dc;
+	dc = tr_cols;
+	if (recall_data == REC_TRN) { strcpy(filename, train_file); dr = tr_rows; }
+	else if (recall_data == REC_TST) { strcpy(filename, test_file); dr = ts_rows; }
+	long double **data = read_csv(filename,'\t',dr,dc);
+	long double **MAP = map(data,dr,dc, terms,NT,NV);
+	int mc = NT+1; // numero de columnas de los datos mapeados, NT + columna de variable dependiente
+	to_text((char*)"data.xls",data,dr,dc);
+	for (int i = 0; i < dr; i++)
+	{
+		long double sum = 0;
+		for (int j = 0; j < NT; j++) sum += *(*(MAP+i)+j) * (*(c+j));
+		*(*(data+i)+dc-1) = sum;
+	}
+
+	char recall_file[100];
+	strcpy(recall_file, prefix);
+	strcat(recall_file,"_recall.xls");
+	//strcat(recall_file, (recall_data == REC_TRN)? "train.xls":"test.xls");
+	to_text(recall_file,data,dr,dc);
+	for (int i = 0; i < dr; ++i){ free(*(MAP+i)); free(*(data+i)); }
+	free(MAP);
+	free(data);
+}
+/* return index of the best fitness */
+int get_best(long double *fitness, int n)
+{
+	int min = *(fitness);
+	int index = 0;
+	for (int i = 1; i < n; i++)
+		if (*(fitness+i) < min) { min = *(fitness+i); index = i; }
+	return index;
+}
+
 void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 {
 	// parameters of the EGA
@@ -1243,44 +1355,68 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	char* f_test = test_file; // (char*)"DB24-glass/TEST.TXT";
 
 	// derivated parameters
-	int BID = 1;//ceil(log2(max_deg));
-	int L = NT*NV*BID;
+	int L = NT*NV;
 	int b2m = round(L*N*Pm); // parameter for later calculations
 
 	// generate random population
 	long double **pop = gen_population(N,L, NT, NV);//, BID, max_deg);
+	// arrays to store fitnesses and coefficients of each individual
+	long double *fit_tr_mmx = new_array_f(N*2);
+	long double *fit_tr_rms = new_array_f(N*2);
+	long double *fit_ts_mmx = new_array_f(N*2);
+	long double *fit_ts_rms = new_array_f(N*2);
 	// evaluate population
-	double long *fit_tr_mmx = new_array_f(N*2);
-	double long *fit_tr_rms = new_array_f(N*2);
-	double long *fit_ts_mmx = new_array_f(N*2);
-	double long *fit_ts_rms = new_array_f(N*2);
-	evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV, BID);
+	evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV);
 
 	for (int g = 0; g < gen; g++)
 	{
 		printf("\nGeneration %d:\n",g);
 
 		// duplicate population and fitness
+		//printf("check1\n");
 		duplicate(pop,N,L,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms);
+		//printf("check2\n");
 		// cross
 		annular_cross(pop, N, L, Pc);
+		//printf("check3\n");
 		// mutation
+		//printf("check4\n");
 		mutate(pop, N, L, Pm);
 		// repair population
+		//printf("check5\n");
 		repair(pop, N, L, NT, NV);
 		// evaluate new population
-		evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV, BID);
+		//printf("check6\n");
+		evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV);
 		// sort population and fitness
 		// and print results
 		switch(minimize)
 		{
 			case RMS:
-				sort(pop, fit_ts_rms,fit_tr_mmx,fit_tr_rms,fit_ts_mmx, 2*N);
-				print_scores(fit_ts_rms, 20);
+				if ( HAS_TEST ) {
+					//printf("check7\n");
+					sort(pop, fit_ts_rms,fit_tr_mmx,fit_tr_rms,fit_ts_mmx, 2*N);
+					//printf("check8\n");
+					print_scores(fit_ts_rms, 20);
+				} else {
+					//printf("check9\n");
+					sort(pop, fit_tr_rms,fit_ts_rms,fit_tr_mmx,fit_ts_mmx, 2*N);
+					//printf("check10\n");
+					print_scores(fit_tr_rms, 20);
+				}
 				break;
 			case MMX:
-				sort(pop, fit_ts_mmx,fit_ts_rms,fit_tr_mmx,fit_tr_rms, 2*N);
-				print_scores(fit_ts_mmx, 20);
+				if ( HAS_TEST ) {
+					//printf("check11\n");
+					sort(pop, fit_ts_mmx,fit_ts_rms,fit_tr_mmx,fit_tr_rms, 2*N);
+					//printf("check12\n");
+					print_scores(fit_ts_mmx, 20);
+				} else {
+					//printf("check13\n");
+					sort(pop, fit_tr_mmx,fit_ts_mmx,fit_ts_rms,fit_tr_rms, 2*N);
+					//printf("check14\n");
+					print_scores(fit_tr_mmx, 20);
+				}
 				break;
 		}
 
@@ -1295,10 +1431,54 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	printInt(terms,NT,NV);
 	long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms;
 	long double *c = ascend(terms,NT,NV,eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
-	// printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
-	// 		trn_rms,tst_rms,trn_mmx,tst_mmx);
 	printf("coefficients:\n");
 	print(c,NT);
+	printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
+			trn_rms,tst_rms,trn_mmx,tst_mmx);
+	
+	recall((char*)"TST_",c,terms,NT,NV);
+
+	int best;
+
+	// best = get_best(fit_tr_mmx,N);
+	// terms = decode_dec(*(pop+best),NT,NV);
+	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_mmx+best));
+	// printf("terms: \n");
+	// printInt(terms,NT,NV);
+	// printf("\t coefficients:\n");
+	// print(*(coeffs+best),NT);
+	// recall((char*)"TRN_MMX",*(coeffs+best),terms,NT,NV);
+
+	// best = get_best(fit_ts_mmx,N);
+	// terms = decode_dec(*(pop+best),NT,NV);
+	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_mmx+best));
+	// printf("terms: \n");
+	// printInt(terms,NT,NV);
+	// printf("\t coefficients:\n");
+	// print(*(coeffs+best),NT);
+	// recall((char*)"TST_MMX",*(coeffs+best),terms,NT,NV);
+
+	// best = get_best(fit_tr_rms,N);
+	// terms = decode_dec(*(pop+best),NT,NV);
+	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_rms+best));
+	// printf("terms: \n");
+	// printInt(terms,NT,NV);
+	// printf("\t coefficients:\n");
+	// print(*(coeffs+best),NT);
+	// recall((char*)"TRN_RMS",*(coeffs+best),terms,NT,NV);
+
+	// best = get_best(fit_ts_rms,N);
+	// terms = decode_dec(*(pop+best),NT,NV);
+	// printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_rms+best));
+	// printf("terms: \n");
+	// printInt(terms,NT,NV);
+	// printf("\t coefficients:\n");
+	// print(*(coeffs+best),NT);
+	// recall((char*)"TST_RMS",*(coeffs+best),terms,NT,NV);
+
+	
+
+	
 
 }
 
@@ -1309,40 +1489,35 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 
 int main(int argc, char const *argv[])
 {
-	srand(time(NULL));
-	// srand(rseed);
+	//srand(time(NULL));
+	srand(rseed);
+	read_input();
+	// array of coefficients
+	// coeffs = new_array_f(N*2, NT);
 	// run_ega();
 
-
 	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms; // errores interno y externo
-	// long double **terms = read_csv((char*)"terms2.conf",'\t',NT,NV);
-	// printInt(terms,NT,NV);	
+	// long double **terms = read_csv((char*)"terms.conf",'\t',NT,NV);
+	// long double *vars = new_array_f(NV);
+	// vars[0] = 2;
+	// vars[1] = 2;
+	// vars[2] = 2;
+	// //vars[3] = 1;
+	// // long double **terms = get_terms(vars,NV,NT);
+	// // printInt(terms,NT,NV);	
+	// print_params();
+	// printf("Continue? ");
+	// char r;
+	// scanf("%c",&r);
+	// if (r != 'y') return 0;
 	// long double *coef = ascend(terms,NT,NV, eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
 	// printf("coefficients found:\n");
-	// printInt(coef,NT);
-	// printf("train minimax=%Lf test minimax=%Lf\ntrain rms=%Lf test rms=%Lf\n", trn_mmx, tst_mmx, trn_rms, tst_rms);
+	// print(coef,NT);
+	// printf("train minimax=%1.12Lf test minimax=%1.12Lf\ntrain rms=%1.12Lf test rms=%1.12Lf\n", trn_mmx, tst_mmx, trn_rms, tst_rms);
 	
 
 	system("clear");
-	read_input();
-	printf("FILE DEFINITION\n\n");
-	printf("TRAIN FILE = %s\n",train_file);
-	printf("TEST FILE  = %s\n",test_file);
-	printf("--------------------------------\n\n");
-	printf("STABILIZATION FACTOR = %Lf\n",stab_fac);
-	printf("QUASI MINIMAX CONDITION = %s\n",(char*)((Q_F == 1)? "true":"false"));
-	printf("QUASI MINIMAX VALUE = %Lf\n",quasi);
-	printf("OPTIMIZE = %s\n",(char*)((minimize == MMX)? "minimax":"rms"));
-	printf("--------------------------------\n\n");
-	printf("CROSS PROBABILITY = %f\n",Pc);
-	printf("MUTATION PROBABILITY = %f\n",Pm);
-	printf("GENERATIONS = %d\n",gen);
-	printf("INDIVIDUALS = %d\n",N);
-	printf("MAXIMUM DEGREE = %d\n",max_deg);
-	printf("--------------------------------\n\n");
-	printf("NUMBER OF TERMS = %d\n",NT);
-
-
+	print_params();
 	char r;
 	printf("\nProceed? [y/n]: ");
 	scanf("%c",&r);
@@ -1443,10 +1618,40 @@ int main(int argc, char const *argv[])
 	// printf("Product A*b:\n");
 	// print(mul(A,lx,ly, b,lx),lx);
 	
-	// write_csv((char*)"prueba1.csv",Ix,lx,lx);
+	// to_text((char*)"prueba1.csv",Ix,lx,lx);
 
 	// printf("Matrix A from z3Vars.dat:\n");
 	// print(A,lx,ly);
+	
+	// long double **a = new_array_f(4,5);
+	// long double *x = new_array_f(4);
+	// *(*(a+0)+0) = 0.1234;
+	// *(*(a+0)+1) = 0.5836;
+	// *(*(a+0)+2) = 0.3461;
+	// *(*(a+0)+3) = 0.0924;
+	// *(*(a+0)+4) = 0.0183;
+	// *(*(a+1)+0) = 0.4215;
+	// *(*(a+1)+1) = 48.0;
+	// *(*(a+1)+2) = 17.0;
+	// *(*(a+1)+3) = 0.0;
+	// *(*(a+1)+4) = -2.51;
+	// *(*(a+2)+0) = 0.2341;
+	// *(*(a+2)+1) = 0.9124;
+	// *(*(a+2)+2) = -0.5424;
+	// *(*(a+2)+3) = 0.1246;
+	// *(*(a+2)+4) = 0.1307;
+	// *(*(a+3)+0) = -2.0;
+	// *(*(a+3)+1) = -11.0;
+	// *(*(a+3)+2) = 0.13;
+	// *(*(a+3)+3) = 0.65;
+	// *(*(a+3)+4) = 0.9916;
+	// lassol(a,4,5,x);
+	// printf("A:\n");
+	// print(a, 4,5);
+	// printf("\nx:\n");
+	// print(x,4);
 
 	return 0;
 }
+
+
