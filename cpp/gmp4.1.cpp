@@ -58,6 +58,16 @@ int NT; // number of terms
 /*########################### OTHER OPERATORS ############################*/
 /*########################################################################*/
 
+int get_degree(int max_d){
+	for(int i = 0; i < 21; i++) {
+		if (max_d <= powers[i])
+		{
+			return powers[i];
+		}
+	}
+	return powers[20];
+}
+
 /* char array must end with '\0' special character */
 int str2int(char *num)
 {
@@ -539,7 +549,7 @@ void read_input()
 	FILE* stream = fopen((char*)"configuration.conf", "r");
 	if(stream == NULL)
 	{
-		printf("Error E09 in get_rows_and_cols(filename,sep): file %s does not exists.\n", "configuration.conf");
+		printf("Error E09 in read_input(): file %s does not exists.\n", "configuration.conf");
 	}
 	char c;
 	for (int i = 0; i < 13; ++i) // 12 inputs, check configuration file
@@ -573,14 +583,18 @@ void read_input()
 		else if (i == 8) Pm = str2double(value);
 		else if (i == 9) gen = str2int(value);
 		else if (i == 10) N = str2int(value);
-		else if (i == 11) max_deg = str2int(value);
+		else if (i == 11) max_deg = get_degree(str2int(value));
 		else if (i == 12) NT = str2int(value);
 		free(input);
 	}
+	//if(stream == NULL) printf("mamadas\n");
+	//print_params();
 	fclose(stream);
+	printf("checkpoint2\n");
 	sigma = max_deg/sqrt(10);
 	mu = 0;
 	get_rows_and_cols(train_file,'\t',tr_rows,tr_cols);
+	printf("checkpoint1\n");
 	if(HAS_TEST) get_rows_and_cols(test_file,'\t',ts_rows,ts_cols);
 	NV = tr_cols - 1;
 
@@ -1123,7 +1137,7 @@ void repair(long double **&pop,int N,int L,int nt,int nv)
 				//printf("check.4\n");
 				long double *temp = gen_valid_term(nv);
 				//printf("check.5\n");
-				// while(term_in_ind(*(pop+ii),L,temp,nv)) temp = gen_valid_term(nv);
+				while(term_in_ind(*(pop+ii),L,temp,nv)) {free(temp); temp = gen_valid_term(nv);}
 				for (int vi = 0; vi < nv; vi++) *(*(pop+ii)+(ti*nv)+vi) = *(temp+vi);
 					//printf("check.6\n");
 				free(temp);
@@ -1452,7 +1466,7 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 
 	best = get_best(fit_ts_mmx,N);
 	terms = decode_dec(*(pop+best),NT,NV);
-	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_mmx+best));
+	printf("\n\nTST MMX error: %2.10Lf\n", *(fit_ts_mmx+best));
 	printf("terms: \n");
 	printInt(terms,NT,NV);
 	printf("\t coefficients:\n");
@@ -1461,7 +1475,7 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 
 	best = get_best(fit_tr_rms,N);
 	terms = decode_dec(*(pop+best),NT,NV);
-	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_rms+best));
+	printf("\n\nTRN RMS error: %2.10Lf\n", *(fit_tr_rms+best));
 	printf("terms: \n");
 	printInt(terms,NT,NV);
 	printf("\t coefficients:\n");
@@ -1470,16 +1484,12 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 
 	best = get_best(fit_ts_rms,N);
 	terms = decode_dec(*(pop+best),NT,NV);
-	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_ts_rms+best));
+	printf("\n\nTST RMS error: %2.10Lf\n", *(fit_ts_rms+best));
 	printf("terms: \n");
 	printInt(terms,NT,NV);
 	printf("\t coefficients:\n");
 	print(*(coeffs+best),NT);
 	recall((char*)"TST_RMS",*(coeffs+best),terms,NT,NV);
-
-	
-
-	
 
 }
 
@@ -1490,8 +1500,8 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 
 int main(int argc, char const *argv[])
 {
-	//srand(time(NULL));
-	srand(rseed);
+	srand(time(NULL));
+	//srand(rseed);
 	read_input();
 	// array of coefficients
 	coeffs = new_array_f(N*2, NT);
