@@ -303,7 +303,6 @@ bool lassol(long double **XY,int xyr,int xyc, long double *&c)
 		sum = 0;
 		for (int j = ii+1; j < m; j++)
 			sum += (*(*(XY+ii)+j)) * (*(c+j));
-		////printf("check2 ii=%d, m=%d\n",ii,m);
 		*(c+ii) = (*(*(XY+ii)+m)-sum)/(*(*(XY+ii)+ii));
 	}
 	return true;
@@ -533,7 +532,6 @@ void get_rows_and_cols(char *filename,char sep, int &rows, int &cols)
 	ch = fgetc(stream);
 	while(ch != EOF)
 	{
-		////printf("check2\n");
 		while(ch != '\n') ch = fgetc(stream);
 		r++;
 		ch = fgetc(stream);
@@ -590,11 +588,9 @@ void read_input()
 	//if(stream == NULL) printf("mamadas\n");
 	//print_params();
 	fclose(stream);
-	printf("checkpoint2\n");
 	sigma = max_deg/sqrt(10);
 	mu = 0;
 	get_rows_and_cols(train_file,'\t',tr_rows,tr_cols);
-	printf("checkpoint1\n");
 	if(HAS_TEST) get_rows_and_cols(test_file,'\t',ts_rows,ts_cols);
 	NV = tr_cols - 1;
 
@@ -1127,19 +1123,13 @@ void repair(long double **&pop,int N,int L,int nt,int nv)
 	{
 		for (int ti = 0; ti < nt; ti++)
 		{
-			//printf("check.1\n");
 			long double *term = new_array_f(nv);
-			//printf("check.2\n");
 			for (int vi = 0; vi < nv; vi++) *(term+vi) = *(*(pop+ii)+(ti*nv)+vi);
-			//printf("check.3\n");
 			if(term_in_ind(*(pop+ii),L,term,nv))
 			{
-				//printf("check.4\n");
 				long double *temp = gen_valid_term(nv);
-				//printf("check.5\n");
 				while(term_in_ind(*(pop+ii),L,temp,nv)) {free(temp); temp = gen_valid_term(nv);}
 				for (int vi = 0; vi < nv; vi++) *(*(pop+ii)+(ti*nv)+vi) = *(temp+vi);
-					//printf("check.6\n");
 				free(temp);
 			}
 			free(term);
@@ -1292,6 +1282,22 @@ void sort(long double **&pop, long double *&fit, long double *&fit2,long double 
 		}
 	}
 }
+
+int get_best_error(long double *errors, int size)
+{
+	long double best = errors[0];
+	int best_i = 0;
+	for (int i = 1; i < size; i++)
+	{
+		if(errors[i] < best)
+		{
+			best = errors[i];
+			best_i = i;
+		}
+	}
+	return best_i;
+}
+
 /*
 ** Memmory of pop must be reserved for double the size(2N)
 ** gen_population already does this.
@@ -1351,15 +1357,7 @@ void recall(char* prefix, long double *c, long double **terms, int NT, int NV)
 	free(MAP);
 	free(data);
 }
-/* return index of the best fitness */
-int get_best(long double *fitness, int n)
-{
-	int min = *(fitness);
-	int index = 0;
-	for (int i = 1; i < n; i++)
-		if (*(fitness+i) < min) { min = *(fitness+i); index = i; }
-	return index;
-}
+
 
 void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 {
@@ -1376,10 +1374,15 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	// generate random population
 	long double **pop = gen_population(N,L, NT, NV);//, BID, max_deg);
 	// arrays to store fitnesses and coefficients of each individual
+
 	long double *fit_tr_mmx = new_array_f(N*2);
+	int best_tr_mmx_i = 0;
 	long double *fit_tr_rms = new_array_f(N*2);
+	int best_tr_rms_i = 0;
 	long double *fit_ts_mmx = new_array_f(N*2);
+	int best_ts_mmx_i = 0;
 	long double *fit_ts_rms = new_array_f(N*2);
+	int best_ts_rms_i = 0;
 	// evaluate population
 	evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV);
 	for (int g = 0; g < gen; g++)
@@ -1387,20 +1390,14 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 		printf("\nGeneration %d:\n",g);
 
 		// duplicate population and fitness
-		//printf("check1\n");
 		duplicate(pop,N,L,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms);
-		//printf("check2\n");
 		// cross
 		annular_cross(pop, N, L, Pc);
-		//printf("check3\n");
 		// mutation
-		//printf("check4\n");
 		mutate(pop, N, L, Pm);
 		// repair population
-		//printf("check5\n");
 		repair(pop, N, L, NT, NV);
 		// evaluate new population
-		//printf("check6\n");
 		evaluate(pop,fit_tr_mmx,fit_tr_rms,fit_ts_mmx,fit_ts_rms, 0, N, NT, NV);
 		// sort population and fitness
 		// and print results
@@ -1408,35 +1405,32 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 		{
 			case RMS:
 				if ( HAS_TEST ) {
-					//printf("check7\n");
 					sort(pop, fit_ts_rms,fit_tr_mmx,fit_tr_rms,fit_ts_mmx, 2*N);
-					//printf("check8\n");
 					print_scores(fit_ts_rms, 20);
 				} else {
-					//printf("check9\n");
 					sort(pop, fit_tr_rms,fit_ts_rms,fit_tr_mmx,fit_ts_mmx, 2*N);
-					//printf("check10\n");
 					print_scores(fit_tr_rms, 20);
 				}
 				break;
 			case MMX:
 				if ( HAS_TEST ) {
-					//printf("check11\n");
 					sort(pop, fit_ts_mmx,fit_ts_rms,fit_tr_mmx,fit_tr_rms, 2*N);
-					//printf("check12\n");
 					print_scores(fit_ts_mmx, 20);
 				} else {
-					//printf("check13\n");
 					sort(pop, fit_tr_mmx,fit_ts_mmx,fit_ts_rms,fit_tr_rms, 2*N);
-					//printf("check14\n");
 					print_scores(fit_tr_mmx, 20);
 				}
 				break;
 		}
 
 		system("clear");
+		best_tr_mmx_i = get_best_error(fit_tr_mmx,N*2);
+		best_ts_mmx_i = get_best_error(fit_ts_mmx,N*2);
+		best_tr_rms_i = get_best_error(fit_tr_rms,N*2);
+		best_ts_rms_i = get_best_error(fit_ts_rms,N*2);
+
 		printf("\nbest train rms = %Lf\tbest test rms = %Lf\nbest train mmx = %Lf\tbest test mmx = %Lf\n",
-			*(fit_tr_rms),*(fit_ts_rms),*(fit_tr_mmx),*(fit_ts_mmx));
+			*(fit_tr_rms+best_tr_rms_i),*(fit_ts_rms+best_ts_rms_i),*(fit_tr_mmx+best_tr_mmx_i),*(fit_ts_mmx+best_ts_mmx_i));
 
 	}
 	// printf("Best individual: \n");
@@ -1455,7 +1449,7 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	int best;
 	long double **terms;
 
-	best = get_best(fit_tr_mmx,N);
+	best = get_best_error(fit_tr_mmx,N*2);
 	terms = decode_dec(*(pop+best),NT,NV);
 	printf("\n\nTRN MMX error: %2.10Lf\n", *(fit_tr_mmx+best));
 	printf("terms: \n");
@@ -1464,7 +1458,7 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	print(*(coeffs+best),NT);
 	recall((char*)"TRN_MMX",*(coeffs+best),terms,NT,NV);
 
-	best = get_best(fit_ts_mmx,N);
+	best = get_best_error(fit_ts_mmx,N*2);
 	terms = decode_dec(*(pop+best),NT,NV);
 	printf("\n\nTST MMX error: %2.10Lf\n", *(fit_ts_mmx+best));
 	printf("terms: \n");
@@ -1473,7 +1467,7 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	print(*(coeffs+best),NT);
 	recall((char*)"TST_MMX",*(coeffs+best),terms,NT,NV);
 
-	best = get_best(fit_tr_rms,N);
+	best = get_best_error(fit_tr_rms,N*2);
 	terms = decode_dec(*(pop+best),NT,NV);
 	printf("\n\nTRN RMS error: %2.10Lf\n", *(fit_tr_rms+best));
 	printf("terms: \n");
@@ -1482,7 +1476,7 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 	print(*(coeffs+best),NT);
 	recall((char*)"TRN_RMS",*(coeffs+best),terms,NT,NV);
 
-	best = get_best(fit_ts_rms,N);
+	best = get_best_error(fit_ts_rms,N*2);
 	terms = decode_dec(*(pop+best),NT,NV);
 	printf("\n\nTST RMS error: %2.10Lf\n", *(fit_ts_rms+best));
 	printf("terms: \n");
@@ -1501,31 +1495,8 @@ void run_ega(/*Vector *&best_ind, long double &best_fit*/)
 int main(int argc, char const *argv[])
 {
 	srand(time(NULL));
-	//srand(rseed);
 	read_input();
-	// array of coefficients
 	coeffs = new_array_f(N*2, NT);
-	// run_ega();
-
-	// long double eps_th,trn_mmx,trn_rms,tst_mmx,tst_rms; // errores interno y externo
-	// long double **terms = read_csv((char*)"terms.conf",'\t',NT,NV);
-	// long double *vars = new_array_f(NV);
-	// vars[0] = 2;
-	// vars[1] = 2;
-	// vars[2] = 2;
-	// //vars[3] = 1;
-	// // long double **terms = get_terms(vars,NV,NT);
-	// // printInt(terms,NT,NV);	
-	// print_params();
-	// printf("Continue? ");
-	// char r;
-	// scanf("%c",&r);
-	// if (r != 'y') return 0;
-	// long double *coef = ascend(terms,NT,NV, eps_th,trn_mmx,trn_rms,tst_rms,tst_mmx);
-	// printf("coefficients found:\n");
-	// print(coef,NT);
-	// printf("train minimax=%1.12Lf test minimax=%1.12Lf\ntrain rms=%1.12Lf test rms=%1.12Lf\n", trn_mmx, tst_mmx, trn_rms, tst_rms);
-	
 
 	system("clear");
 	print_params();
@@ -1544,123 +1515,6 @@ int main(int argc, char const *argv[])
 	{
 		printf("\nFATAL ERROR!!! Invalid Option. Program has crashed.\n\n");
 	}
-
-
-	// long double *term = gen_valid_term(20);
-	// printf("generated term:\n");
-	// print(term,20);
-	// int suma = 0;
-	// for (int i = 0; i < 20; ++i) suma += term[i];
-	// printf("suma %d\n", suma);
-
-	// long double **population = gen_population(10,30, 5, 6, 0, 20);
-	// printf("poblacion:\n");
-	// print(population,10,30);
-	// // printf("decoded:\n");
-	// print(decode_dec(population))
-
-	// long double *ind = new_array_f(12); // 4 terms 3 vars
-	// ind[0] = 1;
-	// ind[1] = 2;
-	// ind[2] = 3;
-	// ind[3] = 4;
-	// ind[4] = 5;
-	// ind[5] = 6;
-	// ind[6] = 7;
-	// ind[7] = 8;
-	// ind[8] = 9;
-	// ind[9] = 10;
-	// ind[10] = 11;
-	// ind[11] = 12;
-	// long double *term = new_array_f(3);
-	// term[0] = 4;
-	// term[1] = 5;
-	// term[2] = 6;
-	// if (term_in_ind(ind,12,term,3))
-	// {
-	// 	printf("term is in individual\n");
-	// }
-	// else printf("term is not in individual\n");
-
-	// long double **Ix = new_Ix(lx);
-	// long double **A = new_array_f(lx,ly);
-	// *(*(A+0)+0) = 1;
-	// *(*(A+0)+1) = 1;
-	// *(*(A+0)+2) = 1;
-	// *(*(A+1)+0) = 13;
-	// *(*(A+1)+1) = 16;
-	// *(*(A+1)+2) = 2;
-	// *(*(A+2)+0) = 7;
-	// *(*(A+2)+1) = 8;
-	// *(*(A+2)+2) = 9;
-	// printf("Matrix A:\n");
-	// print(A,lx,ly);
-	// printf("inverse of A:\n");
-	// print(inverse(A,lx,ly),lx,ly);
-
-	// *(b) = 2;
-	// *(b+1) = 2;
-	// *(b+2) = 2;
-	// printf("Vector b:\n");
-	// print(b,lx);
-	// long double **terms = get_terms(b,lx,comb);
-	// printf("terms(%d,%d):\n",comb);
-	// print(terms,comb,lx);
-
-	// long double *c = new_array_f(lx);
-	// *(*(A+0)+0) = 1.9;
-	// *(*(A+0)+1) = 2.8;
-	// *(*(A+0)+2) = 3.7;
-	// *(*(A+1)+0) = 4.6;
-	// *(*(A+1)+1) = 5.5;
-	// *(*(A+1)+2) = 6.4;
-	// *(*(A+2)+0) = 7.3;
-	// *(*(A+2)+1) = 8.2;
-	// *(*(A+2)+2) = 9.1;
-	// *(b) = 3;
-	// *(b+1) = 2;
-	// *(b+2) = 1;
-	// printf("Matrix A:\n");
-	// print(A,lx,ly);
-	// printf("Vector b:\n");
-	// print(b,lx);
-	// printf("Product b*A:\n");
-	// print(mul(b,lx, A,lx,ly),lx);
-	// printf("Product A*b:\n");
-	// print(mul(A,lx,ly, b,lx),lx);
-	
-	// to_text((char*)"prueba1.csv",Ix,lx,lx);
-
-	// printf("Matrix A from z3Vars.dat:\n");
-	// print(A,lx,ly);
-	
-	// long double **a = new_array_f(4,5);
-	// long double *x = new_array_f(4);
-	// *(*(a+0)+0) = 0.1234;
-	// *(*(a+0)+1) = 0.5836;
-	// *(*(a+0)+2) = 0.3461;
-	// *(*(a+0)+3) = 0.0924;
-	// *(*(a+0)+4) = 0.0183;
-	// *(*(a+1)+0) = 0.4215;
-	// *(*(a+1)+1) = 48.0;
-	// *(*(a+1)+2) = 17.0;
-	// *(*(a+1)+3) = 0.0;
-	// *(*(a+1)+4) = -2.51;
-	// *(*(a+2)+0) = 0.2341;
-	// *(*(a+2)+1) = 0.9124;
-	// *(*(a+2)+2) = -0.5424;
-	// *(*(a+2)+3) = 0.1246;
-	// *(*(a+2)+4) = 0.1307;
-	// *(*(a+3)+0) = -2.0;
-	// *(*(a+3)+1) = -11.0;
-	// *(*(a+3)+2) = 0.13;
-	// *(*(a+3)+3) = 0.65;
-	// *(*(a+3)+4) = 0.9916;
-	// lassol(a,4,5,x);
-	// printf("A:\n");
-	// print(a, 4,5);
-	// printf("\nx:\n");
-	// print(x,4);
 
 	return 0;
 }
